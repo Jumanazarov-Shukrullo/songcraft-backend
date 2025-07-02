@@ -14,20 +14,29 @@ from ...core.config import settings
 class AIService:
     
     def __init__(self):
-        # Configure HTTP client with proxy support and longer timeouts
-        http_client = None
+        # Configure HTTP client with appropriate timeouts based on proxy usage
         if hasattr(settings, 'OPENAI_PROXY_URL') and settings.OPENAI_PROXY_URL:
+            # Using proxy - longer timeouts for potentially slow proxy
+            print(f"🔗 Configuring OpenAI with proxy: {settings.OPENAI_PROXY_URL}")
             http_client = httpx.AsyncClient(
                 proxies=settings.OPENAI_PROXY_URL,
-                timeout=httpx.Timeout(180.0, connect=60.0, read=120.0),  # 3 minutes total, 1 min connect, 2 min read
+                timeout=httpx.Timeout(180.0, connect=60.0, read=120.0),  # 3 minutes total for slow proxy
                 verify=False  # Set to True for production with proper SSL
             )
+            openai_timeout = 180.0  # 3 minutes for proxy
+        else:
+            # Direct connection - normal timeouts
+            print("🚀 Configuring OpenAI with direct connection")
+            http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(60.0, connect=10.0, read=50.0),  # 1 minute total for direct
+            )
+            openai_timeout = 60.0  # 1 minute for direct connection
         
         self.openai_client = AsyncOpenAI(
             api_key=settings.OPENAI_API_KEY,
             http_client=http_client,
             base_url=getattr(settings, 'OPENAI_BASE_URL', None) or "https://api.openai.com/v1",
-            timeout=180.0  # 3 minutes timeout
+            timeout=openai_timeout
         )
         self.suno_api_key = settings.SUNO_API_KEY
         self.suno_api_url = settings.SUNO_API_URL
@@ -35,7 +44,11 @@ class AIService:
     async def generate_lyrics(self, description: str, music_style: str) -> str:
         """Generate lyrics using OpenAI"""
         try:
-            print(f"🔄 Generating lyrics via OpenAI API (this may take 1-3 minutes with proxy)...")
+            # Determine expected time based on connection type
+            if hasattr(settings, 'OPENAI_PROXY_URL') and settings.OPENAI_PROXY_URL:
+                print(f"🔄 Generating lyrics via OpenAI API (with proxy - may take 1-3 minutes)...")
+            else:
+                print(f"🔄 Generating lyrics via OpenAI API (direct connection - should take 5-30 seconds)...")
             
             prompt = f"""
             Create personalized song lyrics based on:
@@ -66,8 +79,11 @@ class AIService:
             
             # Check if it's a timeout specifically
             if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
-                print("⏰ Request timed out - proxy connection may be slow")
-                print("💡 Consider using a faster proxy or increasing timeout")
+                if hasattr(settings, 'OPENAI_PROXY_URL') and settings.OPENAI_PROXY_URL:
+                    print("⏰ Request timed out - proxy connection may be slow")
+                    print("💡 Consider using a faster proxy or switching to direct connection")
+                else:
+                    print("⏰ Request timed out - check your internet connection")
             
             print("🔄 Using fallback lyrics generation...")
             
