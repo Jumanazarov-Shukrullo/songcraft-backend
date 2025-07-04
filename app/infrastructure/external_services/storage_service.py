@@ -29,11 +29,22 @@ class StorageService:
         except S3Error:
             pass  # Bucket might already exist
     
-    async def upload_file(self, file_data: Union[BinaryIO, bytes], filename: str, content_type: str) -> str:
+    async def upload_file(
+        self,
+        file_data: Union[BinaryIO, bytes],
+        filename: str,
+        content_type: str,
+        prefix: str | None = None,
+    ) -> str:
         """Upload file and return URL"""
         try:
-            # Generate unique filename
+            # Generate unique filename while preserving directory structure
             unique_name = f"{uuid.uuid4().hex}_{filename}"
+            
+            # Prepend optional prefix (e.g., songs/<song_id>/images)
+            object_name = (
+                f"{prefix.rstrip('/')}/{unique_name}" if prefix else unique_name
+            )
             
             # Handle both BinaryIO and raw bytes
             if isinstance(file_data, bytes):
@@ -46,10 +57,10 @@ class StorageService:
                 file_size = file_stream.tell()
                 file_stream.seek(0)
             
-            # Upload
+            # Upload the object under the computed path
             self.client.put_object(
                 bucket_name=self.bucket,
-                object_name=unique_name,
+                object_name=object_name,
                 data=file_stream,
                 length=file_size,
                 content_type=content_type
@@ -57,7 +68,7 @@ class StorageService:
             
             # Return URL
             protocol = "https" if settings.MINIO_SECURE else "http"
-            return f"{protocol}://{settings.MINIO_ENDPOINT}/{self.bucket}/{unique_name}"
+            return f"{protocol}://{settings.MINIO_ENDPOINT}/{self.bucket}/{object_name}"
         except Exception as e:
             raise Exception(f"Failed to upload file: {e}")
     

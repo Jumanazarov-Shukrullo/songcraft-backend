@@ -19,6 +19,27 @@ class LoginUserDto(BaseModel):
     password: str
 
 
+class ForgotPasswordDto(BaseModel):
+    """DTO for forgot password request"""
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    """DTO for forgot password response"""
+    message: str
+    success: bool = True
+
+
+class VerifyEmailDto(BaseModel):
+    """DTO for email verification request"""
+    token: str
+
+
+class RefreshTokenDto(BaseModel):
+    """DTO for refresh token request"""
+    refresh_token: str
+
+
 class UserDto(BaseModel):
     """DTO for user response"""
     id: int
@@ -42,4 +63,4 @@ class TokenDto(BaseModel):
 class UserResponse(BaseModel):
     """User response with token"""
     user: UserDto
-    tokens: TokenDto 
+    tokens: TokenDto

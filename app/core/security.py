@@ -52,6 +52,22 @@ def verify_token(token: str) -> Optional[str]:
         return None
 
 
+def verify_refresh_token(token: str) -> Optional[str]:
+    """Verify refresh token and return subject"""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        subject: str = payload.get("sub")
+        token_type: str = payload.get("type")
+        
+        # Ensure it's a refresh token
+        if token_type != "refresh":
+            return None
+            
+        return subject
+    except JWTError:
+        return None
+
+
 def generate_verification_token() -> str:
     """Generate a secure verification token."""
     alphabet = string.ascii_letters + string.digits

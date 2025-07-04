@@ -20,7 +20,12 @@ class UserModel(Base):
     role = Column(SQLEnum(UserRole), default=UserRole.USER, nullable=False)
     email_verified = Column(Boolean, default=False, nullable=False)
     email_verification_token = Column(String, nullable=True)
-    password_reset_token = Column(String, nullable=True)
+    
+    # Password reset fields for production use
+    password_reset_token = Column(String, nullable=True, index=True)
+    password_reset_expires_at = Column(DateTime(timezone=True), nullable=True)
+    password_reset_used = Column(Boolean, default=False, nullable=False)
+    
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime, nullable=True)

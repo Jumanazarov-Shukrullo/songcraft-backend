@@ -8,8 +8,8 @@ class UserId:
     value: int
     
     def __post_init__(self):
-        if self.value <= 0:
-            raise ValueError("User ID must be positive")
+        if self.value < 0:
+            raise ValueError("User ID must be non-negative")
 
 
 @dataclass(frozen=True)
@@ -27,4 +27,4 @@ class SongId:
     
     def __post_init__(self):
         if self.value <= 0:
-            raise ValueError("Song ID must be positive") 
+            raise ValueError("Song ID must be positive")

@@ -43,7 +43,7 @@ class OrderResponseDTO(BaseModel):
             currency=order.amount.currency,
             product_type=order.product_type.value,
             status=order.status.value,
-            payment_id=order.payment_id,
+            payment_id=getattr(order, "payment_id", getattr(order, "payment_provider_id", None)),
             created_at=order.created_at,
             updated_at=order.updated_at
         )

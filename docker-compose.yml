@@ -67,7 +67,7 @@ services:
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-songcraft-files}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - SECRET_KEY=dev-super-secret-key-change-in-production-12345
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-your-openai-api-key-here}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-sk-your-deepseek-api-key-here}
       - SUNO_API_KEY=${SUNO_API_KEY:-your-suno-api-key-here}
       - LEMONSQUEEZY_API_KEY=${LEMONSQUEEZY_API_KEY:-your-lemonsqueezy-api-key}
       - LEMONSQUEEZY_STORE_ID=${LEMONSQUEEZY_STORE_ID:-your-store-id}
@@ -108,7 +108,7 @@ services:
       - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME:-songcraft-files}
       - MINIO_SECURE=${MINIO_SECURE:-false}
       - SECRET_KEY=dev-super-secret-key-change-in-production-12345
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-your-openai-api-key-here}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-sk-your-deepseek-api-key-here}
       - SUNO_API_KEY=${SUNO_API_KEY:-your-suno-api-key-here}
       - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${SMTP_PORT:-587}

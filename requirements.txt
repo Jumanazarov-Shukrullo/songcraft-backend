@@ -19,7 +19,6 @@ redis==5.0.1
 
 # HTTP Client & API Integration
 httpx==0.25.2
-openai==1.40.0
 
 # File Processing
 pillow==10.1.0
@@ -46,3 +45,9 @@ structlog==23.2.0
 
 # File Storage (MinIO)
 minio==7.2.0
+
+# SSE Starlette
+sse-starlette==1.6.1
+
+# Telegram Bot (aiogram)
+aiogram==3.2.0

@@ -1,11 +1,12 @@
 """Upload song images use case"""
 
-from typing import List, BinaryIO
+from typing import List
 from io import BytesIO
 
 from ...domain.repositories.unit_of_work import IUnitOfWork
 from ...infrastructure.external_services.storage_service import StorageService
 from ...domain.value_objects.entity_ids import SongId
+from fastapi import UploadFile
 
 
 class UploadSongImagesUseCase:
@@ -17,28 +18,52 @@ class UploadSongImagesUseCase:
     async def execute(
         self,
         song_id: int,
-        files: List[tuple[bytes, str, str]]  # (file_data, filename, content_type)
+        images: List[UploadFile],
+        user_id,
     ) -> List[str]:
-        """Upload images for song and return URLs"""
+        """Upload images for a song and return their URLs
+
+        Parameters
+        ----------
+        song_id : int
+            ID of the song that the images belong to.
+        images : List[UploadFile]
+            The images uploaded from the client (FastAPI UploadFile objects).
+        user_id : int | UserId
+            Current user – accepted as either plain int or UserId value object.
+        """
         async with self.unit_of_work:
-            # Verify song exists and user owns it
+            # Fetch the song and verify ownership
             song = await self.unit_of_work.songs.get_by_id(SongId(song_id))
             if not song:
                 raise ValueError("Song not found")
-            
-            uploaded_urls = []
-            
-            for file_data, filename, content_type in files:
-                # Create BytesIO object for the storage service
-                file_stream = BytesIO(file_data)
-                
-                # Upload file to storage
+
+            # Normalize user id to int for comparison
+            normalized_user_id = user_id.value if hasattr(user_id, "value") else int(user_id)
+            if song.user_id.value != normalized_user_id:
+                raise ValueError("Not authorized to modify this song")
+
+            uploaded_urls: List[str] = []
+
+            for file in images:
+                # Basic validation – only allow image MIME types
+                if not file.content_type or not file.content_type.startswith("image/"):
+                    raise ValueError(f"{file.filename} is not a valid image file")
+
+                file_bytes = await file.read()
+
+                # Store images in a structured path per-song, e.g. songs/<song_id>/images/
                 file_url = await self.storage_service.upload_file(
-                    file_stream, filename, content_type
+                    file_data=file_bytes,
+                    filename=file.filename or "image.jpg",
+                    content_type=file.content_type,
+                    prefix=f"songs/{song_id}/images",
                 )
                 uploaded_urls.append(file_url)
-                
-                # Note: In a full implementation, we would save file references
-                # to a SongImage entity/model to track uploaded files
-            
+
+            # Update song with the number of images
+            song.set_image_count(song.image_count + len(uploaded_urls))
+            await self.unit_of_work.songs.update(song)
+            await self.unit_of_work.commit()
+
             return uploaded_urls 

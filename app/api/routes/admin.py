@@ -12,6 +12,7 @@ from ...infrastructure.orm.order_model import OrderModel
 from ...infrastructure.orm.song_model import SongModel
 from ...domain.enums import OrderStatus, UserStatus, ProductType, MusicStyle, UserRole
 from ...api.dependencies import get_current_admin_user_model, get_unit_of_work
+from ...application.dtos.user_dtos import UserDto
 from ...domain.repositories.unit_of_work import IUnitOfWork
 
 router = APIRouter()
@@ -133,86 +134,97 @@ async def get_admin_dashboard(
 async def get_all_users(
     admin_user: UserModel = Depends(get_current_admin_user_model),
     db: Session = Depends(get_db),
-    page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    status: str = Query("all", description="Filter by status"),
-    role: str = Query("all", description="Filter by role"),
-    verified: str = Query("all", description="Filter by verification status"),
-    search: str = Query("", description="Search term")
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query("all"),
+    role: Optional[str] = Query("all"), 
+    verified: Optional[str] = Query("all"),
+    search: Optional[str] = Query("")
 ):
-    """Get all users with pagination and filtering (admin only)."""
-    # Build the base query
-    query = db.query(UserModel)
-    
-    # Apply filters
-    if status != "all":
-        if status == "active":
-            query = query.filter(UserModel.status == UserStatus.ACTIVE)
-        elif status == "inactive":
-            query = query.filter(UserModel.status == UserStatus.INACTIVE)
-        elif status == "suspended":
-            query = query.filter(UserModel.status == UserStatus.SUSPENDED)
-        elif status == "pending":
-            query = query.filter(UserModel.status == UserStatus.PENDING_VERIFICATION)
-    
-    if role != "all":
-        if role == "admin":
-            query = query.filter(UserModel.role == UserRole.ADMIN)
-        elif role == "user":
-            query = query.filter(UserModel.role == UserRole.USER)
-    
-    if verified != "all":
-        if verified == "verified":
-            query = query.filter(UserModel.email_verified == True)
-        elif verified == "unverified":
-            query = query.filter(UserModel.email_verified == False)
-    
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            (UserModel.email.ilike(search_term)) |
-            (UserModel.first_name.ilike(search_term)) |
-            (UserModel.last_name.ilike(search_term))
-        )
-    
-    # Get total count
-    total = query.count()
-    
-    # Apply pagination
-    offset = (page - 1) * limit
-    users = query.offset(offset).limit(limit).all()
-    
-    # Get user statistics (orders count and total spent)
-    users_data = []
-    for user in users:
-        # Get order count and total spent for this user
-        user_orders = db.query(OrderModel).filter(OrderModel.user_id == user.id)
-        orders_count = user_orders.count()
-        total_spent_cents = user_orders.filter(OrderModel.status == OrderStatus.COMPLETED).with_entities(func.sum(OrderModel.amount)).scalar() or 0
-        total_spent = float(total_spent_cents / 100.0)  # Convert cents to dollars
+    """Get all users with filtering and pagination (admin only)."""
+    try:
+        # Start with base query
+        query = db.query(UserModel)
         
-        users_data.append({
-            "id": user.id,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "role": user.role.value,
-            "status": user.status.value,
-            "email_verified": user.email_verified,
-            "created_at": user.created_at,
-            "updated_at": user.updated_at,
-            "last_login": user.last_login,
-            "orders_count": orders_count,
-            "total_spent": total_spent
-        })
-    
-    return {
-        "users": users_data,
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "total_pages": (total + limit - 1) // limit
-    }
+        # Apply search filter
+        if search and search.strip():
+            search_term = f"%{search.strip()}%"
+            query = query.filter(
+                UserModel.email.ilike(search_term) |
+                UserModel.first_name.ilike(search_term) |
+                UserModel.last_name.ilike(search_term)
+            )
+        
+        # Apply status filter
+        if status and status != "all":
+            if status == "active":
+                query = query.filter(UserModel.status == UserStatus.ACTIVE)
+            elif status == "inactive":
+                query = query.filter(UserModel.status == UserStatus.INACTIVE)
+            elif status == "suspended":
+                query = query.filter(UserModel.status == UserStatus.SUSPENDED)
+            elif status == "pending":
+                query = query.filter(UserModel.status == UserStatus.PENDING_VERIFICATION)
+        
+        # Apply role filter
+        if role and role != "all":
+            if role == "admin":
+                query = query.filter(UserModel.role == UserRole.ADMIN)
+            elif role == "user":
+                query = query.filter(UserModel.role == UserRole.USER)
+        
+        # Apply email verification filter
+        if verified and verified != "all":
+            if verified == "verified":
+                query = query.filter(UserModel.email_verified == True)
+            elif verified == "unverified":
+                query = query.filter(UserModel.email_verified == False)
+        
+        # Get total count for pagination
+        total_users = query.count()
+        
+        # Apply pagination
+        skip = (page - 1) * limit
+        users = query.offset(skip).limit(limit).all()
+        
+        # Count orders for each user (this might be expensive for large datasets)
+        user_data = []
+        for user in users:
+            orders_count = db.query(OrderModel).filter(OrderModel.user_id == user.id).count()
+            total_spent_cents = db.query(func.sum(OrderModel.amount)).filter(
+                OrderModel.user_id == user.id,
+                OrderModel.status == OrderStatus.COMPLETED
+            ).scalar() or 0
+            total_spent = total_spent_cents / 100.0  # Convert cents to dollars
+            
+            user_data.append({
+                "id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": user.role.value,
+                "status": user.status.value,
+                "email_verified": user.email_verified,
+                "created_at": user.created_at,
+                "updated_at": user.updated_at,
+                "last_login": user.last_login,
+                "orders_count": orders_count,
+                "total_spent": float(total_spent)
+            })
+        
+        return {
+            "users": user_data,
+            "total": total_users,
+            "page": page,
+            "limit": limit,
+            "total_pages": (total_users + limit - 1) // limit
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load users: {str(e)}"
+        )
 
 
 @router.get("/orders")

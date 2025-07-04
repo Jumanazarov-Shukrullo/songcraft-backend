@@ -1,0 +1,1 @@
+"""SongCraft Backend application package""" 

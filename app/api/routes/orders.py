@@ -8,6 +8,7 @@ from ...application.use_cases.process_payment_webhook import ProcessPaymentWebho
 from ...application.dtos.order_dtos import OrderCreateDTO, OrderResponseDTO
 from ...api.dependencies import get_current_user, get_unit_of_work, get_payment_service
 from ...domain.entities.user import User
+from ...domain.value_objects.entity_ids import OrderId
 
 
 router = APIRouter(tags=["orders"])
@@ -43,8 +44,8 @@ async def get_order(
     unit_of_work = Depends(get_unit_of_work)
 ):
     """Get order by ID"""
-    order_repo = unit_of_work.order_repository
-    order = order_repo.get_by_id(order_id)
+    order_repo = unit_of_work.orders
+    order = await order_repo.get_by_id(OrderId(order_id))
     
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -62,8 +63,8 @@ async def get_user_orders(
     unit_of_work = Depends(get_unit_of_work)
 ):
     """Get all orders for current user"""
-    order_repo = unit_of_work.order_repository
-    orders = order_repo.get_by_user_id(current_user.id)
+    order_repo = unit_of_work.orders
+    orders = await order_repo.get_by_user_id(current_user.id)
     
     return [OrderResponseDTO.from_entity(order) for order in orders]
 

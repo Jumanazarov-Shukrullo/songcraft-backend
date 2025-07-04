@@ -4,17 +4,20 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
-from ...domain.enums import MusicStyle, GenerationStatus
+from ...domain.enums import MusicStyle, EmotionalTone, GenerationStatus
 
 
 class CreateSongRequest(BaseModel):
-    """Request DTO for creating a song"""
-    description: str = Field(..., min_length=1, max_length=2000)
-    music_style: MusicStyle
-    order_id: int
+    """Request DTO for creating a song from client"""
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: str = Field(..., min_length=1, max_length=2000, alias='story')
+    music_style: MusicStyle = Field(..., alias='style')
+    lyrics: Optional[str] = None  # when client supplies their own lyrics
+    tone: Optional[EmotionalTone] = None  # new emotional tone field (optional)
 
     class Config:
         use_enum_values = True
+        populate_by_name = True
 
 
 class SongResponse(BaseModel):
@@ -22,9 +25,13 @@ class SongResponse(BaseModel):
     id: int
     user_id: int
     order_id: int
+    title: Optional[str] = None
     description: str
     music_style: str
     status: str
+    lyrics_status: Optional[str] = None
+    audio_status: Optional[str] = None
+    video_status: Optional[str] = None
     lyrics: Optional[str] = None
     audio_url: Optional[str] = None
     video_url: Optional[str] = None
@@ -41,6 +48,7 @@ class SongUpdateRequest(BaseModel):
     description: Optional[str] = Field(None, min_length=1, max_length=2000)
     music_style: Optional[MusicStyle] = None
     lyrics: Optional[str] = None
+    tone: Optional[EmotionalTone] = None
 
     class Config:
         use_enum_values = True
@@ -61,9 +69,13 @@ class SongResponseDTO(BaseModel):
     id: int
     user_id: int
     order_id: int
+    title: Optional[str] = None
     description: str
     music_style: str
     status: str
+    lyrics_status: Optional[str] = None
+    audio_status: Optional[str] = None
+    video_status: Optional[str] = None
     lyrics: Optional[str] = None
     audio_url: Optional[str] = None
     video_url: Optional[str] = None

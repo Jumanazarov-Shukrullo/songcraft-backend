@@ -1,8 +1,9 @@
 """User entity with business logic"""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List
+import uuid
 
 from ..value_objects.email import Email
 from ..value_objects.entity_ids import UserId
@@ -21,13 +22,41 @@ class User:
     role: UserRole = UserRole.USER
     email_verified: bool = False
     email_verification_token: Optional[str] = None
+    
+    # Password reset fields for production use
     password_reset_token: Optional[str] = None
+    password_reset_expires_at: Optional[datetime] = None
+    password_reset_used: bool = False
+    
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
     
     # Domain events
     _events: List = field(default_factory=list, init=False)
+    
+    @classmethod
+    def create(
+        cls,
+        email: Email,
+        password: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None
+    ) -> 'User':
+        """Factory method to create a new user with proper defaults"""
+        return cls(
+            id=UserId(0),  # Repository will assign real ID when persisting
+            email=email,
+            hashed_password=password,
+            first_name=first_name,
+            last_name=last_name,
+            status=UserStatus.PENDING_VERIFICATION,
+            role=UserRole.USER,
+            email_verified=False,
+            email_verification_token=str(uuid.uuid4()),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
     
     def verify_email(self) -> None:
         """Business logic: verify user email"""
@@ -45,6 +74,46 @@ class User:
             email=self.email,
             verified_at=datetime.utcnow()
         ))
+    
+    def generate_password_reset_token(self, expires_in_hours: int = 1) -> str:
+        """Business logic: generate password reset token"""
+        self.password_reset_token = str(uuid.uuid4())
+        self.password_reset_expires_at = datetime.utcnow() + timedelta(hours=expires_in_hours)
+        self.password_reset_used = False
+        self.updated_at = datetime.utcnow()
+        
+        return self.password_reset_token
+    
+    def is_password_reset_token_valid(self, token: str) -> bool:
+        """Business logic: validate password reset token"""
+        if not self.password_reset_token:
+            return False
+        
+        if self.password_reset_token != token:
+            return False
+        
+        if self.password_reset_used:
+            return False
+        
+        if not self.password_reset_expires_at:
+            return False
+        
+        if datetime.utcnow() > self.password_reset_expires_at:
+            return False
+        
+        return True
+    
+    def mark_password_reset_token_used(self) -> None:
+        """Business logic: mark password reset token as used"""
+        self.password_reset_used = True
+        self.updated_at = datetime.utcnow()
+    
+    def clear_password_reset_token(self) -> None:
+        """Business logic: clear password reset token"""
+        self.password_reset_token = None
+        self.password_reset_expires_at = None
+        self.password_reset_used = False
+        self.updated_at = datetime.utcnow()
     
     def suspend(self, reason: str) -> None:
         """Business logic: suspend user"""

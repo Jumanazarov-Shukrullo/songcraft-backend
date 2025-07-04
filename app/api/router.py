@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 # Import all DDD routes
-from .routes import auth, songs, orders, admin, files, users, payments
+from .routes import auth, songs, orders, admin, files, users, payments, bot
 
 # Main API router
 api_router = APIRouter()
@@ -16,6 +16,7 @@ api_router.include_router(orders.router, prefix="/orders", tags=["orders"])
 api_router.include_router(payments.router, prefix="/payments", tags=["payments"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(files.router, prefix="/files", tags=["files"])
+api_router.include_router(bot.router, prefix="/bot", tags=["bot"])
 
 @api_router.get("/health")
 async def health_check():

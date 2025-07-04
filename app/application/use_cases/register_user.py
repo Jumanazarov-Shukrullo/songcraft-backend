@@ -37,7 +37,7 @@ class RegisterUserUseCase:
             
             # Send verification email
             await self.email_service.send_verification_email(
-                to_email=user.email.address,
+                to_email=user.email.value,
                 verification_token=user.email_verification_token
             )
             
@@ -48,7 +48,7 @@ class RegisterUserUseCase:
             return UserResponse(
                 user=UserDto(
                     id=user.id.value,
-                    email=user.email.address,
+                    email=user.email.value,
                     first_name=user.first_name,
                     last_name=user.last_name,
                     status=user.status.value,

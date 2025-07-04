@@ -3,6 +3,7 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
+from datetime import datetime
 
 from ...domain.repositories.user_repository import IUserRepository
 from ...domain.entities.user import User
@@ -43,6 +44,22 @@ class UserRepositoryImpl(IUserRepository):
         model = self.session.query(UserModel).filter(UserModel.email == str(email)).first()
         return self._map_to_entity(model) if model else None
 
+    async def get_by_reset_token(self, token: str) -> Optional[User]:
+        """Get user by password reset token - Production ready method"""
+        model = self.session.query(UserModel).filter(
+            UserModel.password_reset_token == token,
+            UserModel.password_reset_used == False,
+            UserModel.password_reset_expires_at > datetime.utcnow()
+        ).first()
+        return self._map_to_entity(model) if model else None
+
+    async def get_by_verification_token(self, token: str) -> Optional[User]:
+        """Get user by email verification token"""
+        model = self.session.query(UserModel).filter(
+            UserModel.email_verification_token == token
+        ).first()
+        return self._map_to_entity(model) if model else None
+
     async def exists_by_email(self, email: Email) -> bool:
         """Check if user exists by email"""
         return self.session.query(UserModel).filter(UserModel.email == str(email)).first() is not None
@@ -60,6 +77,8 @@ class UserRepositoryImpl(IUserRepository):
             'email_verified': user.email_verified,
             'email_verification_token': user.email_verification_token,
             'password_reset_token': user.password_reset_token,
+            'password_reset_expires_at': user.password_reset_expires_at,
+            'password_reset_used': user.password_reset_used,
             'created_at': user.created_at,
             'updated_at': user.updated_at,
             'last_login': user.last_login
@@ -81,6 +100,8 @@ class UserRepositoryImpl(IUserRepository):
             email_verified=user.email_verified,
             email_verification_token=user.email_verification_token,
             password_reset_token=user.password_reset_token,
+            password_reset_expires_at=user.password_reset_expires_at,
+            password_reset_used=user.password_reset_used,
             created_at=user.created_at,
             updated_at=user.updated_at,
             last_login=user.last_login
@@ -133,6 +154,8 @@ class UserRepositoryImpl(IUserRepository):
             'email_verified': user.email_verified,
             'email_verification_token': user.email_verification_token,
             'password_reset_token': user.password_reset_token,
+            'password_reset_expires_at': user.password_reset_expires_at,
+            'password_reset_used': user.password_reset_used,
             'created_at': user.created_at,
             'updated_at': user.updated_at,
             'last_login': user.last_login
@@ -155,6 +178,8 @@ class UserRepositoryImpl(IUserRepository):
         model.email_verified = user.email_verified
         model.email_verification_token = user.email_verification_token
         model.password_reset_token = user.password_reset_token
+        model.password_reset_expires_at = user.password_reset_expires_at
+        model.password_reset_used = user.password_reset_used
         model.updated_at = user.updated_at
         model.last_login = user.last_login
 
@@ -171,6 +196,8 @@ class UserRepositoryImpl(IUserRepository):
             email_verified=model.email_verified,
             email_verification_token=model.email_verification_token,
             password_reset_token=model.password_reset_token,
+            password_reset_expires_at=getattr(model, 'password_reset_expires_at', None),
+            password_reset_used=getattr(model, 'password_reset_used', False),
             created_at=model.created_at,
             updated_at=model.updated_at,
             last_login=model.last_login

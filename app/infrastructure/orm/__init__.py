@@ -3,6 +3,7 @@
 from .user_model import UserModel
 from .order_model import OrderModel, AuditLogModel, EmailVerificationModel, TaskResultModel
 from .song_model import SongModel, SongImageModel
+from .password_reset_token_model import PasswordResetTokenORM
 
 __all__ = [
     'UserModel',
@@ -11,5 +12,6 @@ __all__ = [
     'AuditLogModel',
     'EmailVerificationModel',
     'TaskResultModel',
-    'SongImageModel'
+    'SongImageModel',
+    'PasswordResetTokenORM'
 ]

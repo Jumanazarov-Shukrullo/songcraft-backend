@@ -1,4 +1,4 @@
-"""Application configuration with proxy support for OpenAI API"""
+"""Application configuration with DeepSeek AI support"""
 
 from pydantic_settings import BaseSettings
 from pydantic import Field
@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     
     # Security
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, env="REFRESH_TOKEN_EXPIRE_DAYS")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=120, env="ACCESS_TOKEN_EXPIRE_MINUTES")  # 2 hours instead of 30 minutes
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=30, env="REFRESH_TOKEN_EXPIRE_DAYS")  # 30 days instead of 7
     ALGORITHM: str = "HS256"
     
     # Database
@@ -26,14 +26,18 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = Field(default="redis://localhost:6379", env="REDIS_URL")
     
-    # OpenAI Configuration with Proxy Support
-    OPENAI_API_KEY: str = Field(..., env="OPENAI_API_KEY")
-    OPENAI_BASE_URL: Optional[str] = Field(default=None, env="OPENAI_BASE_URL")  # Custom base URL (e.g., reverse proxy)
-    OPENAI_PROXY_URL: Optional[str] = Field(default=None, env="OPENAI_PROXY_URL")  # HTTP/HTTPS proxy URL
+    # LLM / AI Provider Configuration
+    LLM_PROVIDER: str = Field(default="deepseek", env="LLM_PROVIDER")
+    DEEPSEEK_API_KEY: str = Field(default="", env="DEEPSEEK_API_KEY")
+    OPENROUTER_API_KEY: str = Field(default="", env="OPENROUTER_API_KEY")
     
     # Suno AI (for music generation)
     SUNO_API_KEY: str = Field(..., env="SUNO_API_KEY")
     SUNO_API_URL: str = Field(default="https://api.suno.ai", env="SUNO_API_URL")
+    
+    # Mureka AI (alternative music generation for restricted regions)
+    MUREKA_API_KEY: str = Field(default="", env="MUREKA_API_KEY")
+    MUREKA_API_URL: str = Field(default="https://api.mureka.ai", env="MUREKA_API_URL")
     
     # Lemon Squeezy Payment Processing
     LEMONSQUEEZY_API_KEY: str = Field(..., env="LEMONSQUEEZY_API_KEY")
@@ -77,6 +81,9 @@ class Settings(BaseSettings):
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, env="RATE_LIMIT_PER_MINUTE")
+    
+    # Telegram Bot internal API key
+    BOT_API_KEY: str = Field(default="change-me", env="BOT_API_KEY")
     
     # Development
     DEBUG: bool = Field(default=False, env="DEBUG")

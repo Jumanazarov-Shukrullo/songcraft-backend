@@ -19,6 +19,16 @@ class IUserRepository(ABC):
         pass
     
     @abstractmethod
+    async def get_by_reset_token(self, token: str) -> Optional[User]:
+        """Get user by password reset token"""
+        pass
+    
+    @abstractmethod
+    async def get_by_verification_token(self, token: str) -> Optional[User]:
+        """Get user by email verification token"""
+        pass
+    
+    @abstractmethod
     async def add(self, user: User) -> User:
         pass
     
