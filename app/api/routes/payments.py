@@ -33,7 +33,7 @@ class CheckoutResponse(BaseModel):
     checkout_url: str
     order_id: UUID
     is_free: Optional[bool] = False
-    song_id: Optional[int] = None  # For free orders
+    song_id: Optional[UUID] = None  # For free orders - changed from int to UUID
 
 
 @router.post("/create-checkout", response_model=CheckoutResponse)
