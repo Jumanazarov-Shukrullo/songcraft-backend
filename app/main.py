@@ -3,12 +3,14 @@ FastAPI main application with DDD architecture
 """
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
 from app.api.router import api_router
+from app.db.database import SessionLocal
 
 
 @asynccontextmanager
@@ -50,8 +52,48 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "architecture": "DDD"}
+    """Health check endpoint that verifies database connectivity"""
+    try:
+        # Test database connectivity
+        db = SessionLocal()
+        try:
+            # Execute a simple query to test connection
+            result = db.execute("SELECT 1").fetchone()
+            db_status = "healthy" if result else "unhealthy"
+        except SQLAlchemyError as e:
+            print(f"Database health check failed: {str(e)}")
+            db_status = "unhealthy"
+            # Still return 200 OK to avoid immediate failure, but mark as unhealthy
+        finally:
+            db.close()
+        
+        # Check Redis connectivity (optional, don't fail if Redis is down)
+        redis_status = "not_configured"  # Default status
+        try:
+            import redis
+            r = redis.from_url(settings.REDIS_URL)
+            r.ping()
+            redis_status = "healthy"
+        except Exception as e:
+            print(f"Redis health check failed: {str(e)}")
+            redis_status = "unhealthy"
+        
+        return {
+            "status": "healthy" if db_status == "healthy" else "degraded",
+            "architecture": "DDD",
+            "database": db_status,
+            "redis": redis_status,
+            "version": "1.0.0"
+        }
+        
+    except Exception as e:
+        print(f"Health check failed: {str(e)}")
+        # Return 200 but mark as unhealthy to help with debugging
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "architecture": "DDD"
+        }
 
 
 if __name__ == "__main__":
