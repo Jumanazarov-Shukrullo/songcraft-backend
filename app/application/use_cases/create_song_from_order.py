@@ -18,7 +18,7 @@ class CreateSongFromOrderUseCase:
         self.unit_of_work = unit_of_work
         self.ai_service = ai_service
     
-    async def execute(self, song_data: CreateSongRequest, user_id: int, order_id: str) -> SongResponse:
+    async def execute(self, song_data: CreateSongRequest, user_id: str, order_id: str) -> SongResponse:
         """Create a song from an existing paid order"""
         async with self.unit_of_work:
             # 1. Verify the order exists and is paid
@@ -31,7 +31,9 @@ class CreateSongFromOrderUseCase:
             if existing_order.status != OrderStatus.PAID:
                 raise ValueError(f"Order {order_id} is not paid (status: {existing_order.status})")
             
-            if existing_order.user_id.value != user_id:
+            # Create UserId from string for comparison
+            user_id_obj = UserId.from_str(user_id)
+            if existing_order.user_id.value != user_id_obj.value:
                 raise ValueError(f"Order {order_id} does not belong to user {user_id}")
 
             # 2. Create song entity linked to the existing paid order
@@ -50,8 +52,8 @@ class CreateSongFromOrderUseCase:
                         tone_enum = None
 
             song = Song(
-                id=SongId(1),  # Placeholder, will be updated by repository
-                user_id=UserId(user_id),
+                id=SongId.generate(),  # Generate proper UUID instead of using integer 1
+                user_id=user_id_obj,  # Use the UserId object created from string
                 order_id=existing_order.id,
                 title=song_data.title,
                 description=song_data.description,
