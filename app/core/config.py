@@ -74,18 +74,9 @@ class Settings(BaseSettings):
     # Google OAuth
     GOOGLE_CLIENT_ID: str = Field(default="", env="GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str = Field(default="", env="GOOGLE_CLIENT_SECRET")
-    
+    GOOGLE_REDIRECT_URI: str = Field(default="", env="GOOGLE_REDIRECT_URI")
     # Dynamic Google redirect URI - constructed from FRONTEND_URL unless explicitly set
-    @property
-    def GOOGLE_REDIRECT_URI(self) -> str:
-        # Check if explicitly set in environment
-        import os
-        explicit_uri = os.getenv("GOOGLE_REDIRECT_URI")
-        if explicit_uri:
-            return explicit_uri
-        
-        # Otherwise, construct from FRONTEND_URL
-        return f"{self.FRONTEND_URL}/auth/google/callback"
+
     
     # CORS
     ALLOWED_HOSTS: list[str] = Field(default=["http://localhost:3000"], env="ALLOWED_HOSTS")
