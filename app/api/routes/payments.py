@@ -91,18 +91,28 @@ async def create_checkout(
             if request.song_data:
                 try:
                     print(f"🎵 Creating song immediately for free order {order.id}")
+                    print(f"🎯 Song data received: {request.song_data}")
                     
-                    # Convert song data to CreateSongRequest
+                    # Validate and clean tone value
+                    tone_value = request.song_data.get("tone")
+                    valid_tones = ["emotional", "romantic", "playful", "ironic"]
+                    if tone_value and tone_value not in valid_tones:
+                        print(f"⚠️ Invalid tone '{tone_value}', setting to None")
+                        tone_value = None
+                    
+                    # Convert song data to CreateSongRequest with validation
                     song_request = CreateSongRequest(
                         title=request.song_data.get("title", "Untitled Song"),
-                        description=request.song_data.get("story", ""),
-                        music_style=request.song_data.get("style", "pop"),
+                        story=request.song_data.get("story") or request.song_data.get("description", ""),
+                        style=request.song_data.get("style", "pop"),
                         lyrics=request.song_data.get("lyrics", ""),
                         recipient_description=request.song_data.get("recipient_description", ""),
                         occasion_description=request.song_data.get("occasion_description", ""),
                         additional_details=request.song_data.get("additional_details", ""),
-                        tone=request.song_data.get("tone")
+                        tone=tone_value
                     )
+                    
+                    print(f"✅ Song request validated successfully")
                     
                     # Create song from the paid order
                     create_song_use_case = CreateSongFromOrderUseCase(unit_of_work, ai_service)
@@ -119,7 +129,10 @@ async def create_checkout(
                     
                 except Exception as e:
                     print(f"❌ Error creating song for free order {order.id}: {e}")
+                    import traceback
+                    traceback.print_exc()
                     # Continue without song creation - user can create it manually
+                    print(f"🔄 Free order {order.id} created successfully, but song creation failed - user can create manually")
             
             # Return frontend URL for free order success
             return CheckoutResponse(
@@ -202,23 +215,34 @@ async def payment_webhook(
                     order_id = custom_data.get("order_id")
                     user_id = custom_data.get("user_id")
                     
+                    print(f"🎯 Webhook song data: {song_data}")
+                    
                     if order_id and user_id and song_data:
+                        # Validate and clean tone value
+                        tone_value = song_data.get("tone")
+                        valid_tones = ["emotional", "romantic", "playful", "ironic"]
+                        if tone_value and tone_value not in valid_tones:
+                            print(f"⚠️ Invalid tone '{tone_value}', setting to None")
+                            tone_value = None
+                        
                         # Create song from the paid order
                         song_request = CreateSongRequest(
                             title=song_data.get("title", "Untitled Song"),
-                            description=song_data.get("story", ""),
-                            music_style=song_data.get("style", "pop"),
+                            story=song_data.get("story") or song_data.get("description", ""),
+                            style=song_data.get("style", "pop"),
                             lyrics=song_data.get("lyrics", ""),
                             recipient_description=song_data.get("recipient_description", ""),
                             occasion_description=song_data.get("occasion_description", ""),
                             additional_details=song_data.get("additional_details", ""),
-                            tone=song_data.get("tone")
+                            tone=tone_value
                         )
                         
-                        create_song_use_case = CreateSongFromOrderUseCase(unit_of_work, ai_service)
-                        await create_song_use_case.execute(song_request, int(user_id), int(order_id))
+                        print(f"✅ Webhook song request validated successfully")
                         
-                        print(f"✅ Song created for paid order {order_id}")
+                        create_song_use_case = CreateSongFromOrderUseCase(unit_of_work, ai_service)
+                        song_response = await create_song_use_case.execute(song_request, int(user_id), int(order_id))
+                        
+                        print(f"✅ Song {song_response.id} created for paid order {order_id}")
                         
             except Exception as e:
                 print(f"❌ Error creating song for paid order: {e}")
