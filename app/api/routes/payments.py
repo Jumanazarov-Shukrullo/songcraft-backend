@@ -10,6 +10,7 @@ from ...application.dtos.order_dtos import OrderCreateDTO
 from ...api.dependencies import get_current_user, get_unit_of_work, get_payment_service
 from ...domain.entities.user import User
 from ...domain.enums import ProductType
+from ...core.config import settings
 
 
 router = APIRouter(tags=["payments"])
@@ -18,7 +19,6 @@ router = APIRouter(tags=["payments"])
 class CreateCheckoutRequest(BaseModel):
     """Request for creating checkout"""
     product_type: str  # "audio_only" or "audio_video"
-    song_data: dict
 
 
 class CheckoutResponse(BaseModel):
@@ -46,25 +46,30 @@ async def create_checkout(
         # Convert to domain enum
         product_type = ProductType.AUDIO_ONLY if request.product_type == "audio_only" else ProductType.AUDIO_VIDEO
         
-        # Create order
+        # Create order with configured pricing (currently $0 for both)
+        amount = settings.AUDIO_PRICE if request.product_type == "audio_only" else settings.VIDEO_PRICE
         order_data = OrderCreateDTO(
             product_type=product_type,
-            amount=1900 if request.product_type == "audio_only" else 2900,  # $19 or $29
+            amount=amount,  # Amount in cents (AUDIO_PRICE=0, VIDEO_PRICE=0)
             currency="USD"
         )
         
         create_order_use_case = CreateOrderUseCase(unit_of_work, payment_service)
         order = await create_order_use_case.execute(order_data, current_user.id)
         
-        # Create checkout URL
-        checkout_url = await payment_service.create_checkout(
+        # Create checkout URL with order_id in custom_data
+        checkout_result = await payment_service.create_checkout_session(
+            customer_email=str(current_user.email),
             product_type=request.product_type,
-            user_email=str(current_user.email),
-            user_id=current_user.id.value
+            custom_data={
+                "user_id": current_user.id.value,
+                "order_id": order.id,
+                "customer_name": str(current_user.email).split("@")[0]  # Extract name from email
+            }
         )
         
         return CheckoutResponse(
-            checkout_url=checkout_url,
+            checkout_url=checkout_result["checkout_url"],
             order_id=order.id
         )
         
@@ -81,7 +86,7 @@ async def payment_webhook(
     unit_of_work = Depends(get_unit_of_work),
     payment_service = Depends(get_payment_service)
 ):
-    """Handle payment webhook from Lemon Squeezy"""
+    """Handle payment webhook from Dodo Payments"""
     try:
         # Get raw body and signature
         body = await request.body()

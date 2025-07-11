@@ -25,23 +25,23 @@ class ProcessPaymentWebhookUseCase:
             # Parse webhook data
             data = json.loads(payload.decode())
             
-            # Extract order information
-            custom_data = data.get("meta", {}).get("custom_data", {})
+            # Extract order information from Dodo Payments webhook
+            payment_data = data.get("data", {})
+            custom_data = payment_data.get("custom_data", {})
             user_id = custom_data.get("user_id")
-            payment_id = data.get("data", {}).get("id")
+            order_id = custom_data.get("order_id")
+            payment_id = payment_data.get("id")
             
-            if not user_id or not payment_id:
+            if not user_id or not order_id or not payment_id:
                 return False
             
             async with self.unit_of_work:
-                # Find pending order for user
-                orders = await self.unit_of_work.orders.get_by_user_id(UserId(int(user_id)))
-                pending_order = next(
-                    (o for o in orders if o.status == OrderStatus.PENDING),
-                    None
-                )
+                # Find specific pending order by ID
+                from ...domain.value_objects.entity_ids import OrderId
                 
-                if not pending_order:
+                pending_order = await self.unit_of_work.orders.get_by_id(OrderId(int(order_id)))
+                
+                if not pending_order or pending_order.status != OrderStatus.PENDING:
                     return False
                 
                 # Mark order as paid

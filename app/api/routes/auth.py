@@ -8,7 +8,9 @@ from ...application.use_cases.register_user import RegisterUserUseCase
 from ...application.use_cases.login_user import LoginUserUseCase
 from ...application.use_cases.forgot_password_use_case import ForgotPasswordUseCase
 from ...application.use_cases.email_verification_use_case import EmailVerificationUseCase
-from ...application.dtos.user_dtos import CreateUserDto, LoginUserDto, UserResponse, ForgotPasswordDto, ForgotPasswordResponse, VerifyEmailDto, RefreshTokenDto
+from ...application.use_cases.google_oauth_use_case import GoogleOAuthUseCase
+from ...application.use_cases.google_oauth_redirect_use_case import GoogleOAuthRedirectUseCase
+from ...application.dtos.user_dtos import CreateUserDto, LoginUserDto, UserResponse, ForgotPasswordDto, ForgotPasswordResponse, VerifyEmailDto, RefreshTokenDto, GoogleOAuthDto, GoogleOAuthCodeDto, GoogleOAuthUrlResponse
 from ...domain.repositories.unit_of_work import IUnitOfWork
 from ...infrastructure.external_services.email_service import EmailService
 
@@ -85,6 +87,49 @@ async def verify_email(
     except Exception as e:
         print(f"Error in verify email endpoint for token {request.token}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/google/url", response_model=GoogleOAuthUrlResponse)
+async def get_google_oauth_url():
+    """Get Google OAuth authorization URL"""
+    try:
+        use_case = GoogleOAuthRedirectUseCase()  # Don't need unit_of_work for URL generation
+        return use_case.get_authorization_url()
+    except Exception as e:
+        print(f"Google OAuth URL generation error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate Google OAuth URL")
+
+
+@router.post("/google/callback", response_model=UserResponse)
+async def google_oauth_callback(
+    request: GoogleOAuthCodeDto,
+    unit_of_work: IUnitOfWork = Depends(get_unit_of_work)
+):
+    """Handle Google OAuth callback with authorization code"""
+    use_case = GoogleOAuthRedirectUseCase(unit_of_work)
+    try:
+        return await use_case.handle_callback(request.code, request.state)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Google OAuth callback error: {e}")
+        raise HTTPException(status_code=500, detail="Google authentication failed")
+
+
+@router.post("/google", response_model=UserResponse)
+async def google_oauth_token(
+    request: GoogleOAuthDto,
+    unit_of_work: IUnitOfWork = Depends(get_unit_of_work)
+):
+    """Google OAuth authentication with ID token"""
+    use_case = GoogleOAuthRedirectUseCase(unit_of_work)
+    try:
+        return await use_case.handle_id_token(request.google_token)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Google OAuth error: {e}")
+        raise HTTPException(status_code=500, detail="Google authentication failed")
 
 
 @router.post("/refresh")

@@ -1,8 +1,10 @@
 """Create Song Use Case"""
 
+import asyncio
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
+from typing import Union
 from ...domain.entities.song import Song
 from ...domain.entities.order import Order
 from ...domain.value_objects.entity_ids import SongId, UserId, OrderId
@@ -11,6 +13,8 @@ from ...domain.value_objects.money import Money
 from ...domain.enums import GenerationStatus, MusicStyle, ProductType, OrderStatus, EmotionalTone
 from ...domain.repositories.unit_of_work import IUnitOfWork
 from ...infrastructure.external_services.ai_service import AIService
+from ...infrastructure.repositories.unit_of_work_impl import UnitOfWorkImpl
+from ...db.database import SessionLocal
 from ...application.dtos.song_dtos import CreateSongRequest, SongResponse
 from ...api.event_broadcaster import broadcaster
 
@@ -22,15 +26,21 @@ class CreateSongUseCase:
         self.unit_of_work = unit_of_work
         self.ai_service = ai_service
     
-    async def execute(self, song_data: CreateSongRequest, user_id: int) -> SongResponse:
-        """Execute the create song use case - now auto-creates a free order & triggers Suno audio"""
+    async def execute(self, song_data: CreateSongRequest, user_id: Union[int, UserId]) -> SongResponse:
+        """Execute the create song use case - creates a free order and song"""
         async with self.unit_of_work:
-            # 1. Create a free order automatically (no payment)
+            # Handle user_id - it might already be a UserId object or an integer
+            if isinstance(user_id, UserId):
+                user_id_obj = user_id
+            else:
+                user_id_obj = UserId(user_id)
+            
+            # 1. Create a free order for direct song creation (backwards compatibility)
             order_repo = self.unit_of_work.orders
             # Temporary placeholder ID (will be replaced after flush)
             order = Order(
                 id=OrderId(1),
-                user_id=UserId(user_id),
+                user_id=user_id_obj,
                 product_type=ProductType.AUDIO_ONLY,
                 amount=Money(Decimal(0)),
                 status=OrderStatus.PAID
@@ -39,19 +49,30 @@ class CreateSongUseCase:
 
             # 2. Create song entity linked to this order
             style_enum = song_data.music_style if isinstance(song_data.music_style, MusicStyle) else MusicStyle(song_data.music_style)
-
-            # Map emotional tone if provided
+            
+            # Convert tone string to enum if provided
             tone_enum = None
             if song_data.tone:
-                tone_enum = song_data.tone if isinstance(song_data.tone, EmotionalTone) else EmotionalTone(song_data.tone)
+                if isinstance(song_data.tone, EmotionalTone):
+                    tone_enum = song_data.tone
+                else:
+                    try:
+                        tone_enum = EmotionalTone(song_data.tone)
+                    except ValueError:
+                        print(f"⚠️ Invalid tone value: {song_data.tone}, ignoring")
+                        tone_enum = None
 
             song = Song(
                 id=SongId(1),  # Placeholder, will be updated by repository
-                user_id=UserId(user_id),
+                user_id=user_id_obj,
                 order_id=saved_order.id,
                 title=song_data.title,
                 description=song_data.description,
                 music_style=style_enum,
+                # Save all form fields to database
+                recipient_description=song_data.recipient_description,
+                occasion_description=song_data.occasion_description,
+                additional_details=song_data.additional_details,
                 tone=tone_enum,
             )
 
@@ -95,29 +116,75 @@ class CreateSongUseCase:
             # Commit DB so song ID is generated before calling external services
             await self.unit_of_work.commit()
 
-            # 3. Trigger Suno audio generation (fire-and-forget for now)
+            # 3. Trigger audio generation with proper status handling
             if saved_song.lyrics:
+                # Start audio generation process
+                saved_song.start_audio_generation()
+                await song_repo.update(saved_song)
+                await self.unit_of_work.commit()
+                
+                # Notify that audio generation started
+                await broadcaster.notify(saved_song.id.value, {
+                    "audio_status": saved_song.audio_status.value,
+                    "status": saved_song.generation_status.value,
+                    "title": saved_song.title
+                })
+                
+                # Call AI service
                 audio_result = await self.ai_service.generate_audio(
                     lyrics=saved_song.lyrics.content,
                     music_style=style_enum.value
                 )
-                if audio_result.get('status') == 'completed':
+                
+                print(f"🎵 AI Service audio result: {audio_result}")
+                
+                if audio_result.get('status') == 'completed' or audio_result.get('status') == 'succeeded':
+                    # Generation completed immediately - update song
                     saved_song.complete_audio_generation(
                         AudioUrl(audio_result['audio_url']),
                         Duration(audio_result.get('duration', 180))
                     )
-                    # Persist audio details
+                    # Also set video URL if available
+                    if audio_result.get('video_url'):
+                        saved_song.video_url = AudioUrl(audio_result['video_url'])  # Reuse AudioUrl for now
+                        saved_song.video_status = GenerationStatus.COMPLETED
+                    
                     await song_repo.update(saved_song)
                     await self.unit_of_work.commit()
+                    
+                    print(f"✅ Song {saved_song.id.value} completed immediately with audio URL: {audio_result['audio_url']}")
+                    
                     await broadcaster.notify(saved_song.id.value, {
                         "audio_status": saved_song.audio_status.value,
                         "video_status": saved_song.video_status.value,
                         "status": saved_song.generation_status.value,
                         "audio_url": audio_result['audio_url'],
+                        "video_url": audio_result.get('video_url'),
+                        "duration": audio_result.get('duration', 180),
+                        "title": saved_song.title,
+                        "message": "🎉 Your song is ready! You can now download it."
+                    })
+                elif audio_result.get('status') == 'processing':
+                    # Generation is in progress - start background polling
+                    # We'll update the song status later when polling completes
+                    print(f"🔄 Audio generation in progress for song {saved_song.id.value}")
+                    
+                    generation_id = audio_result.get('generation_id')
+                    if generation_id:
+                        print(f"🚀 Starting background check for generation {generation_id}")
+                        
+                        # Since Mureka often completes very quickly, check immediately in background
+                        self._start_immediate_check(saved_song.id.value, generation_id)
+                    
+                    await broadcaster.notify(saved_song.id.value, {
+                        "audio_status": saved_song.audio_status.value,
+                        "status": saved_song.generation_status.value,
+                        "message": audio_result.get('message', '🎵 Your song is being created! This usually takes 2-5 minutes.'),
+                        "estimated_completion_minutes": audio_result.get('estimated_completion_minutes', 3),
                         "title": saved_song.title
                     })
-                else:
-                    # Mark audio generation failed for transparency
+                elif audio_result.get('status') == 'failed':
+                    # Genuine failure
                     saved_song.audio_status = GenerationStatus.FAILED
                     saved_song.video_status = GenerationStatus.FAILED  # cascade fail
                     await song_repo.update(saved_song)
@@ -126,6 +193,7 @@ class CreateSongUseCase:
                         "audio_status": saved_song.audio_status.value,
                         "video_status": saved_song.video_status.value,
                         "status": saved_song.generation_status.value,
+                        "error": audio_result.get('error', 'Audio generation failed'),
                         "title": saved_song.title
                     })
 
@@ -146,4 +214,241 @@ class CreateSongUseCase:
                 duration=saved_song.duration.duration if saved_song.duration else None,
                 created_at=saved_song.created_at,
                 title=saved_song.title
-            ) 
+            )
+
+    def _start_immediate_check(self, song_id: int, generation_id: str) -> None:
+        """Start immediate background check for Mureka completion"""
+        async def immediate_check():
+            try:
+                print(f"🔍 Immediate background check for song {song_id}, generation {generation_id}")
+                
+                # First check - no delay (might already be completed)
+                status_result = await self.ai_service.get_mureka_status(generation_id)
+                print(f"📋 Direct status check result: {status_result}")
+                
+                if status_result.get("status") == "succeeded":
+                    await self._update_completed_song(song_id, status_result)
+                elif status_result.get("status") in ["running", "preparing", "processing"]:
+                    print(f"⏳ Song {song_id} still processing, will check again in 30 seconds...")
+                    
+                    # Wait and check again
+                    await asyncio.sleep(30)
+                    
+                    # Check one more time
+                    final_status = await self.ai_service.get_mureka_status(generation_id)
+                    if final_status.get("status") == "succeeded":
+                        await self._update_completed_song(song_id, final_status)
+                    else:
+                        print(f"⏳ Song {song_id} still not ready after second check")
+                        await broadcaster.notify(song_id, {
+                            "message": "🎵 Your song is still being created. Check your Dashboard in a few minutes.",
+                            "estimated_completion_minutes": 3
+                        })
+                else:
+                    print(f"❌ Unexpected status for song {song_id}: {status_result.get('status')}")
+                    
+            except Exception as e:
+                print(f"❌ Error in immediate check for song {song_id}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Start the immediate check task
+        import asyncio
+        loop = asyncio.get_event_loop()
+        task = loop.create_task(immediate_check())
+        
+        # Add task reference to prevent garbage collection
+        if not hasattr(self, '_check_tasks'):
+            self._check_tasks = set()
+        self._check_tasks.add(task)
+        task.add_done_callback(self._check_tasks.discard)
+        
+        print(f"🚀 Immediate check task started for song {song_id}")
+
+    async def _update_completed_song(self, song_id: int, status_result: dict) -> None:
+        """Helper method to update a completed song in the database"""
+        try:
+            print(f"✅ Song {song_id} completed! Updating database...")
+            
+            # Create new database session
+            session = SessionLocal()
+            try:
+                unit_of_work = UnitOfWorkImpl(session)
+                async with unit_of_work:
+                    song_repo = unit_of_work.songs
+                    song = await song_repo.get_by_id(SongId(song_id))
+                    
+                    if not song:
+                        print(f"❌ Song {song_id} not found")
+                        return
+                    
+                    # Extract audio URL from the response
+                    audio_url = status_result.get("audio_url")
+                    duration = status_result.get("duration", 180)
+                    
+                    if audio_url:
+                        print(f"🎧 Updating song {song_id} with audio URL: {audio_url}")
+                        print(f"⏱️ Duration: {duration} seconds")
+                        
+                        # Update song with completed audio
+                        song.complete_audio_generation(
+                            AudioUrl(audio_url),
+                            Duration(duration)
+                        )
+                        
+                        await song_repo.update(song)
+                        await unit_of_work.commit()
+                        
+                        print(f"💾 Song {song_id} successfully updated in database")
+                        
+                        # Broadcast completion to frontend
+                        await broadcaster.notify(song_id, {
+                            "audio_status": song.audio_status.value,
+                            "video_status": song.video_status.value,
+                            "status": song.generation_status.value,
+                            "audio_url": audio_url,
+                            "duration": duration,
+                            "title": song.title,
+                            "message": "🎉 Your song is ready! You can now download it."
+                        })
+                        
+                        print(f"📡 Completion notification sent for song {song_id}")
+                    else:
+                        print(f"❌ No audio URL found in status result for song {song_id}")
+            
+            except Exception as e:
+                print(f"❌ Error updating song {song_id}: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                session.close()
+                
+        except Exception as e:
+            print(f"❌ Error in _update_completed_song for song {song_id}: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _start_background_polling(self, song_id: int, generation_id: str) -> None:
+        """Start background task to poll for completion and update song when done"""
+        async def poll_and_update():
+            try:
+                print(f"🔄 Starting background polling for song {song_id}, generation {generation_id}")
+                
+                # Wait before starting polling - songs typically take 2-5 minutes  
+                await asyncio.sleep(20)  # Initial 20s delay before first poll
+                
+                # Continue polling until completion
+                final_result = await self.ai_service.poll_generation_completion(generation_id)
+                
+                print(f"📋 Background polling result for song {song_id}: {final_result}")
+                
+                # Update the song in database using new session for background task
+                session = SessionLocal()
+                
+                try:
+                    unit_of_work = UnitOfWorkImpl(session)
+                    async with unit_of_work:
+                        song_repo = unit_of_work.songs
+                        song = await song_repo.get_by_id(SongId(song_id))
+                        
+                        if not song:
+                            print(f"❌ Song {song_id} not found for update")
+                            return
+                        
+                        if final_result.get('status') == 'completed' and final_result.get('audio_url'):
+                            print(f"✅ Updating song {song_id} with completed audio")
+                            print(f"🎧 Audio URL: {final_result.get('audio_url')}")
+                            
+                            # Update song with completed audio
+                            song.complete_audio_generation(
+                                AudioUrl(final_result['audio_url']),
+                                Duration(final_result.get('duration', 180))
+                            )
+                            
+                            # Also update video if available
+                            if final_result.get('video_url'):
+                                from ...domain.value_objects.song_content import VideoUrl
+                                song.video_url = VideoUrl(final_result['video_url'])
+                                song.video_status = GenerationStatus.COMPLETED
+                                print(f"🎬 Video URL: {final_result.get('video_url')}")
+                            
+                            await song_repo.update(song)
+                            await unit_of_work.commit()
+                            
+                            print(f"💾 Song {song_id} updated in database with completed status")
+                            
+                            # Broadcast completion to frontend
+                            await broadcaster.notify(song_id, {
+                                "audio_status": song.audio_status.value,
+                                "video_status": song.video_status.value,
+                                "status": song.generation_status.value,
+                                "audio_url": final_result['audio_url'],
+                                "video_url": final_result.get('video_url'),
+                                "duration": final_result.get('duration', 180),
+                                "title": song.title,
+                                "message": "🎉 Your song is ready! You can now download it."
+                            })
+                            
+                            print(f"📡 Broadcasted completion notification for song {song_id}")
+                            
+                        elif final_result.get('status') == 'failed':
+                            print(f"❌ Marking song {song_id} as failed: {final_result.get('error', 'Unknown error')}")
+                            
+                            # Mark as failed
+                            song.audio_status = GenerationStatus.FAILED
+                            song.video_status = GenerationStatus.FAILED
+                            
+                            await song_repo.update(song)
+                            await unit_of_work.commit()
+                            
+                            # Broadcast failure
+                            await broadcaster.notify(song_id, {
+                                "audio_status": song.audio_status.value,
+                                "video_status": song.video_status.value,
+                                "status": song.generation_status.value,
+                                "error": final_result.get('error', 'Generation failed'),
+                                "title": song.title
+                            })
+                        else:
+                            # Still processing - leave as is, frontend will show processing status
+                            print(f"⏳ Song {song_id} still processing after polling")
+                            await broadcaster.notify(song_id, {
+                                "message": "🎵 Your song is still being created. Please check back in a few minutes.",
+                                "title": song.title,
+                                "estimated_completion_minutes": 5
+                            })
+                            
+                except Exception as e:
+                    print(f"❌ Error updating song {song_id} in database: {e}")
+                    import traceback
+                    traceback.print_exc()
+                finally:
+                    session.close()
+                        
+            except Exception as e:
+                print(f"❌ Error in background polling for song {song_id}: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                # On error, notify that generation might still be processing
+                try:
+                    await broadcaster.notify(song_id, {
+                        "message": "🎵 Your song is being created. Please check your Dashboard in a few minutes.",
+                        "title": "Song Generation",
+                        "estimated_completion_minutes": 5
+                    })
+                except Exception as broadcast_error:
+                    print(f"❌ Failed to broadcast error notification: {broadcast_error}")
+        
+        # Start the background task with explicit task creation
+        import asyncio
+        loop = asyncio.get_event_loop()
+        task = loop.create_task(poll_and_update())
+        
+        # Add task reference to prevent garbage collection
+        if not hasattr(self, '_background_tasks'):
+            self._background_tasks = set()
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        
+        print(f"🚀 Background polling task started for song {song_id}") 

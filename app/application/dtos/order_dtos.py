@@ -11,7 +11,7 @@ from ...domain.enums import OrderStatus, ProductType
 class OrderCreateDTO(BaseModel):
     """Request DTO for creating an order"""
     product_type: ProductType
-    amount: float = Field(..., gt=0)
+    amount: float = Field(..., ge=0)
     currency: str = Field(default="USD")
 
     class Config:

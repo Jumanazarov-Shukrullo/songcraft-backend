@@ -44,6 +44,10 @@ class AIService:
         # Mureka
         self.mureka_api_key = settings.MUREKA_API_KEY
         self.mureka_api_url = settings.MUREKA_API_URL
+        
+        # Debug: Print Mureka configuration
+        print(f"🔧 Mureka API URL: {self.mureka_api_url}")
+        print(f"🔧 Mureka API Key: {self.mureka_api_key[:20]}..." if self.mureka_api_key else "🔧 Mureka API Key: None")
 
     # ------------------------------------------------------------------
     # LYRICS (DEE P S E E K) -------------------------------------------
@@ -163,6 +167,22 @@ class AIService:
             print("🔄 Falling back to Mureka AI for music generation…")
             mureka_result = await self._generate_audio_mureka(lyrics, music_style)
             print(f"🪄 Mureka result: {mureka_result}")
+            
+            # If Mureka returns processing status, try polling for completion
+            if mureka_result.get("status") == "processing":
+                generation_id = mureka_result.get("generation_id")
+                if generation_id:
+                    try:
+                        return await self._poll_mureka_completion(generation_id)
+                    except Exception as e:
+                        print(f"⚠️ Polling failed, but generation started successfully: {e}")
+                        # Return processing status - user can check later
+                        return {
+                            "status": "processing",
+                            "message": "Music generation started successfully. Please check back in a few minutes.",
+                            "generation_id": generation_id
+                        }
+            
             return mureka_result
         if not gen_id:
             print("❌ Unable to start audio generation with any provider")
@@ -188,23 +208,236 @@ class AIService:
         }
         try:
             async with httpx.AsyncClient(timeout=300.0) as client:
-                url1 = f"{self.mureka_api_url}/v1/generate"
-                url2 = f"{self.mureka_api_url}/generate"
-                resp = await client.post(url1, headers=headers, json={"lyrics": lyrics, "style": style})
-                if resp.status_code == 404:
-                    resp = await client.post(url2, headers=headers, json={"lyrics": lyrics, "style": style})
+                # Use correct Mureka API endpoint and payload format
+                url = f"{self.mureka_api_url}/v1/song/generate"
+                payload = {
+                    "lyrics": lyrics,
+                    "model": "auto",
+                    "prompt": style  # Use style as prompt description
+                }
+                
+                print(f"🎤 Mureka API request to: {url}")
+                print(f"🎤 Mureka API payload: {payload}")
+                
+                resp = await client.post(url, headers=headers, json=payload)
                 print(f"🎤 Mureka API response {resp.status_code}: {resp.text[:200]}")
+                
                 if resp.status_code != 200:
                     return {"status": "failed", "error": f"mureka-{resp.status_code}"}
+                
                 data = resp.json()
+                print(f"🎤 Mureka API response data: {data}")
+                
+                # Return the generation ID to poll for completion later
                 return {
-                    "status": "completed",
-                    "audio_url": data.get("audio_url"),
-                    "duration": data.get("duration", 180),
+                    "status": "processing",
+                    "generation_id": data.get("id"),
+                    "created_at": data.get("created_at"),
                 }
         except Exception as e:
             print(f"❌ Mureka request failed: {e}")
             return {"status": "failed", "error": str(e)}
+
+    async def _get_mureka_status(self, generation_id: str) -> dict:
+        """Check Mureka generation status using the correct query endpoint"""
+        try:
+            async with httpx.AsyncClient() as client:
+                # Use the correct status endpoint from working implementation
+                endpoint = f"{self.mureka_api_url}/v1/song/query/{generation_id}"
+                
+                print(f"🔍 Checking Mureka status: {endpoint}")
+                resp = await client.get(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {self.mureka_api_key}"},
+                    timeout=30.0
+                )
+                print(f"🔍 Response {resp.status_code}: {resp.text[:200]}")
+                
+                if resp.status_code == 200:
+                    result = resp.json()
+                    print(f"✅ Successfully got status: {result}")
+                    
+                    status = result.get("status", "unknown")
+                    
+                    # Handle successful completion
+                    if status == "succeeded":
+                        # Extract URLs from choices array (matching working implementation)
+                        audio_urls = []
+                        video_urls = []
+                        choices = result.get("choices", [])
+                        
+                        for choice in choices:
+                            url = choice.get("url", "")
+                            if url:
+                                # Assume audio files for now - Mureka typically returns audio
+                                audio_urls.append(url)
+                        
+                        # Extract duration from first choice and convert from ms to seconds
+                        duration_seconds = 180  # Default duration
+                        if choices and len(choices) > 0:
+                            duration_ms = choices[0].get("duration", 180000)  # Default 3 minutes in ms
+                            duration_seconds = duration_ms // 1000  # Convert to seconds
+                        
+                        return {
+                            "status": "completed",  # Convert to our internal status
+                            "audio_url": audio_urls[0] if audio_urls else None,
+                            "video_url": None,  # Mureka typically doesn't return video in song generation
+                            "duration": duration_seconds,  # Duration in seconds
+                            "all_urls": audio_urls,
+                            "choices": choices,
+                            **result
+                        }
+                    else:
+                        # Return the status as-is for processing/failed states
+                        return result
+                        
+                elif resp.status_code == 404:
+                    return {"status": "error", "error": "Generation not found"}
+                else:
+                    return {"status": "error", "error": f"Status check failed with code {resp.status_code}"}
+                    
+        except Exception as e:
+            print(f"❌ Error checking Mureka status: {e}")
+            return {"status": "error", "error": str(e)}
+
+    async def _poll_mureka_completion(self, generation_id: str) -> dict:
+        """Poll Mureka for completion status with MAXIMUM cost-optimization - only 2-3 API calls total"""
+        print(f"🔄 Starting MAXIMUM cost-optimized Mureka polling for generation ID: {generation_id}")
+        print(f"💰 Strategy: Only 2-3 API calls total per song (vs 60+ original)")
+        
+        # MAXIMUM COST-OPTIMIZED: Only 2-3 total API calls per song
+        start_time = asyncio.get_event_loop().time()
+        max_polls = 3  # Maximum 3 API calls total
+        poll_intervals = [30, 120, 180]  # 30s, 2min, 3min intervals
+        
+        for poll_count in range(max_polls):
+            # Check once initially, then wait before subsequent polls
+            if poll_count > 0:
+                wait_time = poll_intervals[min(poll_count-1, len(poll_intervals)-1)]
+                print(f"⏳ Waiting {wait_time}s before next poll ({poll_count+1}/{max_polls})")
+                await asyncio.sleep(wait_time)
+            
+            # Get status
+            status_result = await self._get_mureka_status(generation_id)
+            status = status_result.get("status", "unknown")
+            elapsed = int(asyncio.get_event_loop().time() - start_time)
+            print(f"⏱️ Poll {poll_count+1}/{max_polls} ({elapsed}s): {status} [Max 3 calls total]")
+            
+            # Check for terminal states
+            if status == "succeeded" or status == "completed":
+                print("✅ Mureka generation completed successfully!")
+                return {
+                    "status": "completed",
+                    "audio_url": status_result.get("audio_url"),
+                    "video_url": status_result.get("video_url"),
+                    "duration": status_result.get("duration", 180),
+                    "generation_id": generation_id,
+                    "all_urls": status_result.get("all_urls", []),
+                    **status_result
+                }
+            elif status in ["failed", "cancelled", "timeouted"]:
+                print(f"❌ Mureka generation failed with status: {status}")
+                return {
+                    "status": "failed",
+                    "error": f"Generation {status}",
+                    "generation_id": generation_id,
+                    **status_result
+                }
+            elif status == "error":
+                # Temporary error - continue but don't wait as long
+                print(f"⚠️ Temporary error: {status_result.get('error', 'Unknown error')}")
+                
+                # After 3 error polls, give up and return processing status
+                if poll_count >= 3:
+                    return {
+                        "status": "processing",
+                        "message": "🎵 Your song is being created! Status checking temporarily unavailable.",
+                        "generation_id": generation_id,
+                        "provider": "mureka",
+                        "estimated_completion_minutes": 3,
+                        "user_instructions": "Check your Dashboard in a few minutes to download your completed song!"
+                    }
+            else:
+                # Continue polling for preparing/processing/running/generating states
+                print(f"⏳ Status: {status}, will continue polling...")
+        
+        # Reached max polls - return processing status
+        elapsed = int(asyncio.get_event_loop().time() - start_time)
+        print(f"⚠️ Reached max polls ({max_polls}) after {elapsed}s - returning processing status [MAXIMUM cost-optimized: 3 calls total]")
+        return {
+            "status": "processing", 
+            "message": "🎵 Song generation is in progress. Please check your Dashboard in 10-15 minutes for the completed song.",
+            "generation_id": generation_id,
+            "provider": "mureka",
+            "estimated_completion_minutes": 10,
+            "user_instructions": "Your song will be available for download on the Dashboard when ready!"
+        }
+
+    async def get_mureka_status(self, generation_id: str) -> dict:
+        """Public method to get Mureka generation status"""
+        return await self._get_mureka_status(generation_id)
+
+    async def poll_generation_completion(self, generation_id: str) -> dict:
+        """Public method to poll for generation completion (used by background tasks)"""
+        try:
+            print(f"🔍 Polling completion for generation ID: {generation_id}")
+            
+            # Use the existing Mureka polling logic
+            result = await self._poll_mureka_completion(generation_id)
+            
+            print(f"📋 Polling result: {result.get('status', 'unknown')}")
+            return result
+            
+        except Exception as e:
+            print(f"❌ Error polling generation completion: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "provider": "mureka"
+            }
+
+    # ------------------------------------------------------------------
+    # Audio/Video Download Helpers
+    # ------------------------------------------------------------------
+    async def download_audio_file(self, url: str, filename: str = None) -> bytes:
+        """Download audio file from URL and return bytes"""
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+                
+                print(f"✅ Successfully downloaded audio file ({len(response.content)} bytes)")
+                return response.content
+                
+        except Exception as e:
+            print(f"❌ Failed to download audio: {e}")
+            raise
+
+    async def get_song_download_info(self, generation_id: str) -> dict:
+        """Get download URLs for a completed song"""
+        try:
+            status_result = await self._get_mureka_status(generation_id)
+            
+            if status_result.get("status") == "completed":
+                return {
+                    "status": "ready",
+                    "audio_url": status_result.get("audio_url"),
+                    "all_urls": status_result.get("all_urls", []),
+                    "generation_id": generation_id
+                }
+            else:
+                return {
+                    "status": status_result.get("status", "unknown"),
+                    "message": "Song not ready for download yet",
+                    "generation_id": generation_id
+                }
+                
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "generation_id": generation_id
+            }
 
     # ------------------------------------------------------------------
     # Existing video helpers (generate_video / sync_video_to_beats)

@@ -58,7 +58,7 @@ class SongRepositoryImpl(ISongRepository):
             'music_style': song.music_style.value if song.music_style else None,
             'recipient_description': song.recipient_description,
             'occasion_description': song.occasion_description,
-            'tone': song.tone.value if song.tone else None,
+            'tone': song.tone.value if song.tone and hasattr(song.tone, 'value') else song.tone,
             'additional_details': song.additional_details,
             'lyrics': song.lyrics.content if song.lyrics else None,
             'audio_url': song.audio_url.url if song.audio_url else None,
@@ -131,7 +131,7 @@ class SongRepositoryImpl(ISongRepository):
             music_style=song.music_style.value if song.music_style else None,
             recipient_description=song.recipient_description,
             occasion_description=song.occasion_description,
-            tone=song.tone.value if song.tone else None,
+            tone=song.tone.value if song.tone and hasattr(song.tone, 'value') else song.tone,
             additional_details=song.additional_details,
             lyrics=song.lyrics.content if song.lyrics else None,
             audio_url=song.audio_url.url if song.audio_url else None,
@@ -154,7 +154,7 @@ class SongRepositoryImpl(ISongRepository):
         model.music_style = song.music_style.value if song.music_style else None
         model.recipient_description = song.recipient_description
         model.occasion_description = song.occasion_description
-        model.tone = song.tone.value if song.tone else None
+        model.tone = song.tone.value if song.tone and hasattr(song.tone, 'value') else song.tone
         model.additional_details = song.additional_details
         model.lyrics = song.lyrics.content if song.lyrics else None
         model.audio_url = song.audio_url.url if song.audio_url else None

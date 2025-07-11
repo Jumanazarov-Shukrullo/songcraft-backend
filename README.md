@@ -38,7 +38,7 @@ app/
 
 ### **Easily Replaceable Services** 
 - **Email**: SMTP → Mailgun/SendGrid/Resend
-- **Payment**: Lemon Squeezy → Stripe → any provider
+- **Payment**: Dodo Payments → Stripe → any provider
 - **Storage**: MinIO → AWS S3 → any cloud storage
 - **AI**: OpenAI + Suno → any AI providers
 
@@ -100,12 +100,10 @@ DEBUG=True
 OPENAI_API_KEY=sk-...
 SUNO_API_KEY=your-suno-key
 
-# Payment (Lemon Squeezy)
-LEMONSQUEEZY_API_KEY=your-lemon-squeezy-key
-LEMONSQUEEZY_STORE_ID=your-store-id
-LEMONSQUEEZY_WEBHOOK_SECRET=your-webhook-secret
-LEMONSQUEEZY_PRODUCT_ID_AUDIO=product-id-audio
-LEMONSQUEEZY_PRODUCT_ID_VIDEO=product-id-video
+# Payment (Dodo Payments)
+DODO_PAYMENTS_API_KEY=your-dodo-payments-api-key
+DODO_PAYMENTS_WEBHOOK_SECRET=your-dodo-payments-webhook-secret
+DODO_PAYMENTS_API_URL=https://api.dodopayments.com/v1
 
 # Storage (MinIO)
 MINIO_ENDPOINT=localhost:9000
@@ -119,6 +117,11 @@ SMTP_PORT=587
 SMTP_USERNAME=your-email@gmail.com
 SMTP_PASSWORD=your-app-password
 FROM_EMAIL=your-email@gmail.com
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/auth/google/callback
 
 # Frontend
 FRONTEND_URL=http://localhost:3000
@@ -220,9 +223,9 @@ class EmailService:
 # infrastructure/external_services/payment_service.py
 class PaymentService:
     def __init__(self):
-        # Change from Lemon Squeezy to Stripe
-        self.client = StripeClient(api_key=settings.STRIPE_API_KEY)
-        # self.client = LemonSqueezyClient(...)  # Old implementation
+        # Current: Dodo Payments integration
+        self.client = DodoPaymentsClient(api_key=settings.DODO_PAYMENTS_API_KEY)
+        # Previous: LemonSqueezy (migrated)
 ```
 
 ## 📊 Database Migrations

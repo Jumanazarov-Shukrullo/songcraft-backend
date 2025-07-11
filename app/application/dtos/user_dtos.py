@@ -40,6 +40,23 @@ class RefreshTokenDto(BaseModel):
     refresh_token: str
 
 
+class GoogleOAuthDto(BaseModel):
+    """DTO for Google OAuth request"""
+    google_token: str
+
+
+class GoogleOAuthCodeDto(BaseModel):
+    """DTO for Google OAuth authorization code"""
+    code: str
+    state: Optional[str] = None
+
+
+class GoogleOAuthUrlResponse(BaseModel):
+    """DTO for Google OAuth authorization URL response"""
+    authorization_url: str
+    state: str
+
+
 class UserDto(BaseModel):
     """DTO for user response"""
     id: int

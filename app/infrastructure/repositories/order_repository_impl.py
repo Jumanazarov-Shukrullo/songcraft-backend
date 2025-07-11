@@ -45,14 +45,18 @@ class OrderRepositoryImpl(IOrderRepository):
     async def add(self, order: Order) -> Order:
         """Add a new order"""
         # Create model without ID for new orders
+        # Handle product_type - it might be an enum or already a string
+        product_type_value = order.product_type.value if hasattr(order.product_type, 'value') else str(order.product_type)
+        status_value = order.status.value if hasattr(order.status, 'value') else str(order.status)
+        
         model_data = {
             'user_id': order.user_id.value,
             'lemon_squeezy_order_id': order.lemon_squeezy_order_id,
             'lemon_squeezy_payment_id': order.lemon_squeezy_payment_id,
-            'product_type': order.product_type.value,
+            'product_type': product_type_value,
             'amount': order.amount.amount,
             'currency': order.amount.currency,
-            'status': order.status.value,
+            'status': status_value,
             'created_at': order.created_at,
             'updated_at': order.updated_at,
             'completed_at': order.completed_at
@@ -126,14 +130,18 @@ class OrderRepositoryImpl(IOrderRepository):
 
     def _create_model_from_entity(self, order: Order) -> OrderModel:
         """Create ORM model from domain entity"""
+        # Handle product_type and status - they might be enums or already strings
+        product_type_value = order.product_type.value if hasattr(order.product_type, 'value') else str(order.product_type)
+        status_value = order.status.value if hasattr(order.status, 'value') else str(order.status)
+        
         return OrderModel(
             user_id=order.user_id.value,
             lemon_squeezy_order_id=order.lemon_squeezy_order_id,
             lemon_squeezy_payment_id=order.lemon_squeezy_payment_id,
-            product_type=order.product_type.value,
+            product_type=product_type_value,
             amount=order.amount.amount,
             currency=order.amount.currency,
-            status=order.status.value,
+            status=status_value,
             created_at=order.created_at,
             updated_at=order.updated_at,
             completed_at=order.completed_at
@@ -141,12 +149,16 @@ class OrderRepositoryImpl(IOrderRepository):
 
     def _update_model_from_entity(self, model: OrderModel, order: Order) -> None:
         """Update ORM model from domain entity"""
+        # Handle product_type and status - they might be enums or already strings
+        product_type_value = order.product_type.value if hasattr(order.product_type, 'value') else str(order.product_type)
+        status_value = order.status.value if hasattr(order.status, 'value') else str(order.status)
+        
         model.lemon_squeezy_order_id = order.lemon_squeezy_order_id
         model.lemon_squeezy_payment_id = order.lemon_squeezy_payment_id
-        model.product_type = order.product_type.value
+        model.product_type = product_type_value
         model.amount = order.amount.amount
         model.currency = order.amount.currency
-        model.status = order.status.value
+        model.status = status_value
         model.updated_at = order.updated_at
         model.completed_at = order.completed_at
 

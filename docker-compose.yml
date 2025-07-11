@@ -69,11 +69,9 @@ services:
       - SECRET_KEY=dev-super-secret-key-change-in-production-12345
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-sk-your-deepseek-api-key-here}
       - SUNO_API_KEY=${SUNO_API_KEY:-your-suno-api-key-here}
-      - LEMONSQUEEZY_API_KEY=${LEMONSQUEEZY_API_KEY:-your-lemonsqueezy-api-key}
-      - LEMONSQUEEZY_STORE_ID=${LEMONSQUEEZY_STORE_ID:-your-store-id}
-      - LEMONSQUEEZY_WEBHOOK_SECRET=${LEMONSQUEEZY_WEBHOOK_SECRET:-your-webhook-secret}
-      - LEMONSQUEEZY_PRODUCT_ID_AUDIO=${LEMONSQUEEZY_PRODUCT_ID_AUDIO:-audio-product-id}
-      - LEMONSQUEEZY_PRODUCT_ID_VIDEO=${LEMONSQUEEZY_PRODUCT_ID_VIDEO:-video-product-id}
+      - DODO_PAYMENTS_API_KEY=${DODO_PAYMENTS_API_KEY:-your-dodo-payments-api-key}
+      - DODO_PAYMENTS_WEBHOOK_SECRET=${DODO_PAYMENTS_WEBHOOK_SECRET:-your-dodo-payments-webhook-secret}
+      - DODO_PAYMENTS_API_URL=${DODO_PAYMENTS_API_URL:-https://api.dodopayments.com/v1}
       - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USERNAME=${SMTP_USERNAME:-your-email@gmail.com}

@@ -1,1 +1,0 @@
-"""SongCraft Telegram bot package (aiogram based).""" 

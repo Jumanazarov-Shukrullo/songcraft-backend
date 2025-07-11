@@ -33,4 +33,5 @@ class UserModel(Base):
     # Relationships
     orders = relationship('OrderModel', back_populates='user')
     songs = relationship('SongModel', back_populates='user')
-    audit_logs = relationship('AuditLogModel', back_populates='user') 
+    audit_logs = relationship('AuditLogModel', back_populates='user')
+    feedback = relationship('FeedbackModel', back_populates='user') 

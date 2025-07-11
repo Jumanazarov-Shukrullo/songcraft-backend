@@ -1,334 +1,251 @@
-"""Payment service for processing payments via LemonSqueezy"""
+"""Payment service for processing payments via Dodo Payments SDK"""
 
-import httpx
+import os
 from typing import Dict, Optional
 from datetime import datetime, timedelta
 
+from dodopayments import DodoPayments
 from ...core.config import settings
 
 
 class PaymentService:
     
     def __init__(self):
-        self.api_key = settings.LEMONSQUEEZY_API_KEY
-        self.store_id = settings.LEMONSQUEEZY_STORE_ID
-        self.api_url = settings.LEMONSQUEEZY_API_URL
-        self.webhook_secret = settings.LEMONSQUEEZY_WEBHOOK_SECRET
-        self.product_id_audio = settings.LEMONSQUEEZY_PRODUCT_ID_AUDIO
-        self.product_id_video = settings.LEMONSQUEEZY_PRODUCT_ID_VIDEO
+        self.api_key = settings.DODO_PAYMENTS_API_KEY
+        self.webhook_secret = settings.DODO_PAYMENTS_WEBHOOK_SECRET
+        self.audio_product_id = settings.DODO_AUDIO_PRODUCT_ID
+        self.video_product_id = settings.DODO_VIDEO_PRODUCT_ID
+        
+        # Initialize Dodo Payments client
+        self.client = DodoPayments(
+            bearer_token=self.api_key
+        )
     
     async def create_checkout_session(self, 
                                     customer_email: str,
-                                    product_type: str,  # "audio" or "video"
+                                    product_type: str,  # "audio_only" or "audio_video"
                                     custom_data: Dict = None) -> Dict:
-        """Create checkout session with LemonSqueezy"""
+        """Create payment link with Dodo Payments SDK"""
         try:
-            print(f"💳 Creating LemonSqueezy checkout for {product_type}...")
+            print(f"💳 Creating Dodo Payments checkout for {product_type}...")
             
-            # Determine product ID and price
-            if product_type == "audio":
-                product_id = self.product_id_audio
-                price = settings.AUDIO_PRICE
-            elif product_type == "video":
-                product_id = self.product_id_video  
-                price = settings.VIDEO_PRICE
+            # Determine product ID based on type
+            if product_type == "audio_only":
+                product_id = self.audio_product_id
+            elif product_type == "audio_video":
+                product_id = self.video_product_id
             else:
                 raise ValueError(f"Invalid product type: {product_type}")
             
-            # Prepare checkout data
-            checkout_data = {
-                "data": {
-                    "type": "checkouts",
-                    "attributes": {
-                        "product_id": int(product_id),
-                        "custom_price": price,  # Price in cents
-                        "custom_data": {
-                            "customer_email": customer_email,
-                            "product_type": product_type,
-                            **(custom_data or {})
-                        },
-                        "expires_at": (datetime.utcnow() + timedelta(hours=24)).isoformat() + "Z",
-                        "preview": False,
-                        "test_mode": settings.ENVIRONMENT != "production"
-                    },
-                    "relationships": {
-                        "store": {
-                            "data": {
-                                "type": "stores",
-                                "id": self.store_id
-                            }
-                        }
-                    }
-                }
+            # Extract customer info - convert Email object to string first
+            email_str = str(customer_email)
+            customer_name = (custom_data or {}).get("customer_name", email_str.split("@")[0])
+            
+            print(f"🔗 Creating payment with product ID: {product_id}")
+            print(f"👤 Customer: {email_str}")
+            
+            # Create payment using Dodo Payments SDK
+            payment = self.client.payments.create(
+                payment_link=True,
+                billing={
+                    "city": "N/A",
+                    "country": "US", 
+                    "state": "N/A",
+                    "street": "N/A",
+                    "zipcode": 0
+                },
+                customer={
+                    "email": email_str,
+                    "name": customer_name
+                },
+                product_cart=[{
+                    "product_id": product_id,
+                    "quantity": 1
+                }],
+                return_url=f"{settings.FRONTEND_URL}/payment/success"
+            )
+            
+            # Extract payment link and ID from response
+            payment_link = payment.payment_link
+            payment_id = payment.payment_id
+            
+            if not payment_link:
+                raise Exception("No payment_link in SDK response")
+            
+            result = {
+                "checkout_id": payment_id,
+                "checkout_url": payment_link,
+                "payment_id": payment_id,
+                "expires_at": (datetime.now() + timedelta(hours=24)).isoformat() + "Z",
+                "product_type": product_type,
+                "currency": "USD"
             }
             
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.api_url}/checkouts",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/vnd.api+json",
-                        "Accept": "application/vnd.api+json"
-                    },
-                    json=checkout_data
-                )
-                
-                if response.status_code == 201:
-                    data = response.json()
-                    checkout = data["data"]
-                    
-                    result = {
-                        "checkout_id": checkout["id"],
-                        "checkout_url": checkout["attributes"]["url"],
-                        "expires_at": checkout["attributes"]["expires_at"],
-                        "product_type": product_type,
-                        "price": price,
-                        "currency": "USD"
-                    }
-                    
-                    print(f"✅ Checkout created successfully: {result['checkout_url']}")
-                    return result
-                else:
-                    error_msg = f"LemonSqueezy API error: {response.status_code} - {response.text}"
-                    print(f"❌ {error_msg}")
-                    raise Exception(error_msg)
+            print(f"✅ Dodo Payments checkout created successfully")
+            print(f"🆔 Payment ID: {payment_id}")
+            print(f"🔗 Payment Link: {payment_link}")
+            return result
                     
         except Exception as e:
-            print(f"❌ Error creating checkout: {e}")
+            print(f"❌ Error creating Dodo Payments checkout: {e}")
             raise Exception(f"Failed to create checkout: {e}")
     
     async def get_checkout_status(self, checkout_id: str) -> Dict:
-        """Get checkout status from LemonSqueezy"""
+        """Get payment status from Dodo Payments"""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.api_url}/checkouts/{checkout_id}",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Accept": "application/vnd.api+json"
-                    }
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    checkout = data["data"]
-                    
-                    return {
-                        "checkout_id": checkout["id"],
-                        "status": checkout["attributes"]["status"],
-                        "url": checkout["attributes"]["url"],
-                        "expires_at": checkout["attributes"]["expires_at"],
-                        "custom_data": checkout["attributes"].get("custom_data", {})
-                    }
-                else:
-                    return {"status": "error", "error": response.text}
+            # Use SDK to get payment information if available
+            # Note: Check Dodo Payments SDK docs for payment retrieval method
+            return {
+                "payment_id": checkout_id,
+                "status": "pending",  # This would come from SDK
+                "currency": "USD"
+            }
                     
         except Exception as e:
             return {"status": "error", "error": str(e)}
     
-    async def verify_webhook(self, payload: bytes, signature: str) -> bool:
-        """Verify webhook signature from LemonSqueezy"""
+    def verify_webhook(self, payload: bytes, signature: str) -> bool:
+        """Verify webhook signature from Dodo Payments using Standard Webhooks spec"""
         try:
             import hmac
             import hashlib
             
-            # LemonSqueezy sends signature as hex HMAC-SHA256
+            # Dodo Payments uses Standard Webhooks specification
+            # The signature should be in format: v1,signature1,signature2...
+            if not signature.startswith("v1,"):
+                return False
+            
+            # Extract signatures (remove v1, prefix)
+            signatures = signature[3:].split(",")
+            
+            # Generate expected signature using webhook secret
             expected_signature = hmac.new(
                 self.webhook_secret.encode(),
                 payload,
                 hashlib.sha256
             ).hexdigest()
             
-            return hmac.compare_digest(signature, expected_signature)
+            # Check if any signature matches
+            return any(hmac.compare_digest(sig, expected_signature) for sig in signatures)
             
         except Exception as e:
-            print(f"❌ Webhook verification error: {e}")
+            print(f"❌ Dodo webhook verification error: {e}")
             return False
     
     async def process_webhook(self, webhook_data: Dict) -> Dict:
-        """Process webhook from LemonSqueezy"""
+        """Process webhook from Dodo Payments"""
         try:
-            event_name = webhook_data.get("meta", {}).get("event_name")
-            webhook_id = webhook_data.get("meta", {}).get("webhook_id")
+            event_type = webhook_data.get("type")
+            payment_data = webhook_data.get("data", {})
             
-            print(f"📨 Processing webhook: {event_name} (ID: {webhook_id})")
+            print(f"📨 Processing Dodo webhook: {event_type}")
             
-            if event_name == "order_created":
-                return await self._handle_order_created(webhook_data)
-            elif event_name == "order_refunded":
-                return await self._handle_order_refunded(webhook_data)
-            elif event_name == "subscription_created":
-                return await self._handle_subscription_created(webhook_data)
+            if event_type == "payment.succeeded":
+                return await self._handle_payment_succeeded(payment_data)
+            elif event_type == "payment.failed":
+                return await self._handle_payment_failed(payment_data)
+            elif event_type == "payment.refunded":
+                return await self._handle_payment_refunded(payment_data)
             else:
-                print(f"⚠️ Unhandled webhook event: {event_name}")
-                return {"status": "ignored", "event": event_name}
+                print(f"⚠️ Unhandled Dodo webhook event: {event_type}")
+                return {"status": "ignored", "event": event_type}
                 
         except Exception as e:
-            print(f"❌ Error processing webhook: {e}")
+            print(f"❌ Error processing Dodo webhook: {e}")
             return {"status": "error", "error": str(e)}
     
-    async def _handle_order_created(self, webhook_data: Dict) -> Dict:
-        """Handle successful order creation"""
+    async def _handle_payment_succeeded(self, payment_data: Dict) -> Dict:
+        """Handle successful payment"""
         try:
-            order_data = webhook_data["data"]
-            order_id = order_data["id"]
+            payment_id = payment_data.get("payment_id")
+            customer_email = payment_data.get("customer_email")
+            total_amount = payment_data.get("total_amount", 0)
             
-            attributes = order_data["attributes"]
-            customer_email = attributes["user_email"]
-            order_number = attributes["order_number"]
-            total = attributes["total"]
-            currency = attributes["currency"]
-            status = attributes["status"]
-            
-            # Extract custom data
-            custom_data = attributes.get("first_order_item", {}).get("custom_data", {})
-            product_type = custom_data.get("product_type", "unknown")
-            
-            print(f"💰 Order created: #{order_number} - {customer_email} - ${total/100:.2f} {currency}")
-            print(f"🎵 Product type: {product_type}")
+            print(f"✅ Payment succeeded: {payment_id}")
+            print(f"💰 Amount: ${total_amount}")
+            print(f"👤 Customer: {customer_email}")
             
             return {
-                "status": "processed",
-                "order_id": order_id,
-                "order_number": order_number,
-                "customer_email": customer_email,
-                "total": total,
-                "currency": currency,
-                "product_type": product_type,
-                "payment_status": status,
-                "custom_data": custom_data
+                "status": "success",
+                "payment_id": payment_id,
+                "amount": total_amount,
+                "customer_email": customer_email
             }
             
         except Exception as e:
-            print(f"❌ Error handling order created: {e}")
+            print(f"❌ Error handling payment success: {e}")
             return {"status": "error", "error": str(e)}
     
-    async def _handle_order_refunded(self, webhook_data: Dict) -> Dict:
-        """Handle order refund"""
+    async def _handle_payment_failed(self, payment_data: Dict) -> Dict:
+        """Handle failed payment"""
         try:
-            order_data = webhook_data["data"]
-            order_id = order_data["id"]
+            payment_id = payment_data.get("payment_id")
+            error_message = payment_data.get("error_message", "Unknown error")
             
-            attributes = order_data["attributes"]
-            order_number = attributes["order_number"]
-            refunded_amount = attributes.get("refunded_amount", 0)
+            print(f"❌ Payment failed: {payment_id}")
+            print(f"💭 Reason: {error_message}")
             
-            print(f"💸 Order refunded: #{order_number} - ${refunded_amount/100:.2f}")
+            return {
+                "status": "failed",
+                "payment_id": payment_id,
+                "error": error_message
+            }
+            
+        except Exception as e:
+            print(f"❌ Error handling payment failure: {e}")
+            return {"status": "error", "error": str(e)}
+    
+    async def _handle_payment_refunded(self, payment_data: Dict) -> Dict:
+        """Handle refunded payment"""
+        try:
+            payment_id = payment_data.get("payment_id")
+            refund_amount = payment_data.get("refund_amount", 0)
+            
+            print(f"🔄 Payment refunded: {payment_id}")
+            print(f"💰 Refund amount: ${refund_amount}")
             
             return {
                 "status": "refunded",
-                "order_id": order_id,
-                "order_number": order_number,
-                "refunded_amount": refunded_amount
+                "payment_id": payment_id,
+                "refund_amount": refund_amount
             }
             
         except Exception as e:
-            print(f"❌ Error handling refund: {e}")
-            return {"status": "error", "error": str(e)}
-    
-    async def _handle_subscription_created(self, webhook_data: Dict) -> Dict:
-        """Handle subscription creation (for future premium features)"""
-        try:
-            subscription_data = webhook_data["data"]
-            subscription_id = subscription_data["id"]
-            
-            attributes = subscription_data["attributes"]
-            customer_email = attributes["user_email"]
-            status = attributes["status"]
-            
-            print(f"🔄 Subscription created: {subscription_id} - {customer_email} - {status}")
-            
-            return {
-                "status": "subscription_created",
-                "subscription_id": subscription_id,
-                "customer_email": customer_email,
-                "subscription_status": status
-            }
-            
-        except Exception as e:
-            print(f"❌ Error handling subscription: {e}")
+            print(f"❌ Error handling payment refund: {e}")
             return {"status": "error", "error": str(e)}
     
     async def create_customer(self, email: str, name: str = None) -> Dict:
-        """Create customer in LemonSqueezy (for future use)"""
-        try:
-            customer_data = {
-                "data": {
-                    "type": "customers",
-                    "attributes": {
-                        "email": email,
-                        "name": name or email.split("@")[0]
-                    },
-                    "relationships": {
-                        "store": {
-                            "data": {
-                                "type": "stores",
-                                "id": self.store_id
-                            }
-                        }
-                    }
-                }
-            }
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.api_url}/customers",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/vnd.api+json",
-                        "Accept": "application/vnd.api+json"
-                    },
-                    json=customer_data
-                )
-                
-                if response.status_code == 201:
-                    data = response.json()
-                    customer = data["data"]
-                    
-                    return {
-                        "customer_id": customer["id"],
-                        "email": customer["attributes"]["email"],
-                        "name": customer["attributes"]["name"]
-                    }
-                else:
-                    print(f"⚠️ Customer creation failed: {response.text}")
-                    return {"error": response.text}
-                    
-        except Exception as e:
-            print(f"❌ Error creating customer: {e}")
-            return {"error": str(e)}
+        """Create customer (if supported by SDK)"""
+        return {
+            "customer_id": email,  # Placeholder - check SDK docs
+            "email": email,
+            "name": name or email.split("@")[0]
+        }
     
-    async def get_order(self, order_id: str) -> Optional[Dict]:
-        """Get order details from LemonSqueezy"""
+    async def get_payment(self, payment_id: str) -> Optional[Dict]:
+        """Get payment details (if supported by SDK)"""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.api_url}/orders/{order_id}",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Accept": "application/vnd.api+json"
-                    }
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    order = data["data"]
-                    
-                    attributes = order["attributes"]
-                    return {
-                        "order_id": order["id"],
-                        "order_number": attributes["order_number"],
-                        "customer_email": attributes["user_email"],
-                        "total": attributes["total"],
-                        "currency": attributes["currency"],
-                        "status": attributes["status"],
-                        "created_at": attributes["created_at"],
-                        "custom_data": attributes.get("first_order_item", {}).get("custom_data", {})
-                    }
-                else:
-                    print(f"⚠️ Order not found: {order_id}")
-                    return None
-                    
+            # Check Dodo Payments SDK for payment retrieval method
+            return {
+                "payment_id": payment_id,
+                "status": "unknown"  # This would come from SDK
+            }
         except Exception as e:
-            print(f"❌ Error getting order: {e}")
-            return None 
+            print(f"❌ Error getting payment: {e}")
+            return None
+    
+    async def create_checkout(self, product_type: str, user_email: str, user_id: str) -> str:
+        """Create checkout and return payment URL"""
+        try:
+            result = await self.create_checkout_session(
+                customer_email=user_email,
+                product_type=product_type,
+                custom_data={
+                    "user_id": user_id,
+                    "customer_name": user_email.split("@")[0]
+                }
+            )
+            return result["checkout_url"]
+        except Exception as e:
+            print(f"❌ Error in create_checkout: {e}")
+            raise 

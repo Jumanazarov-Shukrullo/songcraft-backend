@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
-from ...domain.enums import MusicStyle, EmotionalTone, GenerationStatus
+from ...domain.enums import MusicStyle, GenerationStatus, EmotionalTone
 
 
 class CreateSongRequest(BaseModel):
@@ -13,7 +13,14 @@ class CreateSongRequest(BaseModel):
     description: str = Field(..., min_length=1, max_length=2000, alias='story')
     music_style: MusicStyle = Field(..., alias='style')
     lyrics: Optional[str] = None  # when client supplies their own lyrics
-    tone: Optional[EmotionalTone] = None  # new emotional tone field (optional)
+    
+    # Song creation form fields (Step 1)
+    recipient_description: Optional[str] = Field(None, max_length=1000)
+    occasion_description: Optional[str] = Field(None, max_length=1000) 
+    additional_details: Optional[str] = Field(None, max_length=500)
+    
+    # Emotional tone (Step 3)
+    tone: Optional[EmotionalTone] = None
 
     class Config:
         use_enum_values = True
@@ -48,7 +55,6 @@ class SongUpdateRequest(BaseModel):
     description: Optional[str] = Field(None, min_length=1, max_length=2000)
     music_style: Optional[MusicStyle] = None
     lyrics: Optional[str] = None
-    tone: Optional[EmotionalTone] = None
 
     class Config:
         use_enum_values = True

@@ -39,13 +39,21 @@ class Settings(BaseSettings):
     MUREKA_API_KEY: str = Field(default="", env="MUREKA_API_KEY")
     MUREKA_API_URL: str = Field(default="https://api.mureka.ai", env="MUREKA_API_URL")
     
-    # Lemon Squeezy Payment Processing
-    LEMONSQUEEZY_API_KEY: str = Field(..., env="LEMONSQUEEZY_API_KEY")
-    LEMONSQUEEZY_STORE_ID: str = Field(..., env="LEMONSQUEEZY_STORE_ID")
-    LEMONSQUEEZY_WEBHOOK_SECRET: str = Field(..., env="LEMONSQUEEZY_WEBHOOK_SECRET")
-    LEMONSQUEEZY_API_URL: str = Field(default="https://api.lemonsqueezy.com/v1", env="LEMONSQUEEZY_API_URL")
-    LEMONSQUEEZY_PRODUCT_ID_AUDIO: str = Field(..., env="LEMONSQUEEZY_PRODUCT_ID_AUDIO")
-    LEMONSQUEEZY_PRODUCT_ID_VIDEO: str = Field(..., env="LEMONSQUEEZY_PRODUCT_ID_VIDEO")
+    # Dodo Payments Configuration
+    DODO_PAYMENTS_API_KEY: str = Field(..., env="DODO_PAYMENTS_API_KEY")
+    DODO_PAYMENTS_WEBHOOK_SECRET: str = Field(..., env="DODO_PAYMENTS_WEBHOOK_SECRET")
+    
+    # Product IDs from Dodo Payments dashboard
+    DODO_AUDIO_PRODUCT_ID: str = Field(..., env="DODO_AUDIO_PRODUCT_ID")
+    DODO_VIDEO_PRODUCT_ID: str = Field(..., env="DODO_VIDEO_PRODUCT_ID")
+
+    # Legacy LemonSqueezy (commented out - can be removed after full migration)
+    # LEMONSQUEEZY_API_KEY: str = Field(..., env="LEMONSQUEEZY_API_KEY")
+    # LEMONSQUEEZY_STORE_ID: str = Field(..., env="LEMONSQUEEZY_STORE_ID")
+    # LEMONSQUEEZY_WEBHOOK_SECRET: str = Field(..., env="LEMONSQUEEZY_WEBHOOK_SECRET")
+    # LEMONSQUEEZY_API_URL: str = Field(default="https://api.lemonsqueezy.com/v1", env="LEMONSQUEEZY_API_URL")
+    # LEMONSQUEEZY_PRODUCT_ID_AUDIO: str = Field(..., env="LEMONSQUEEZY_PRODUCT_ID_AUDIO")
+    # LEMONSQUEEZY_PRODUCT_ID_VIDEO: str = Field(..., env="LEMONSQUEEZY_PRODUCT_ID_VIDEO")
     
     # Email SMTP Configuration
     SMTP_HOST: str = Field(..., env="SMTP_HOST")
@@ -63,6 +71,11 @@ class Settings(BaseSettings):
     MINIO_BUCKET_NAME: str = Field(..., env="MINIO_BUCKET_NAME")
     MINIO_SECURE: bool = Field(default=False, env="MINIO_SECURE")  # Use HTTPS
     
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = Field(default="", env="GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_SECRET: str = Field(default="", env="GOOGLE_CLIENT_SECRET")
+    GOOGLE_REDIRECT_URI: str = Field(default="http://localhost:3000/auth/google/callback", env="GOOGLE_REDIRECT_URI")
+    
     # CORS
     ALLOWED_HOSTS: list[str] = Field(default=["http://localhost:3000"], env="ALLOWED_HOSTS")
     
@@ -76,8 +89,8 @@ class Settings(BaseSettings):
     ALLOWED_IMAGE_TYPES: list[str] = Field(default=["image/jpeg", "image/png", "image/webp"])
     
     # Pricing
-    AUDIO_PRICE: int = Field(default=1900, env="AUDIO_PRICE")  # $19.00 in cents
-    VIDEO_PRICE: int = Field(default=2900, env="VIDEO_PRICE")  # $29.00 in cents
+    AUDIO_PRICE: int = Field(default=0, env="AUDIO_PRICE")  # $19.00 in cents
+    VIDEO_PRICE: int = Field(default=0, env="VIDEO_PRICE")  # $29.00 in cents
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, env="RATE_LIMIT_PER_MINUTE")
