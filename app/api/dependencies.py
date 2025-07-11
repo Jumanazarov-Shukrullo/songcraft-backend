@@ -41,7 +41,7 @@ async def get_current_user(
         unit_of_work = UnitOfWorkImpl(db)
         async with unit_of_work:
             from ..domain.value_objects.entity_ids import UserId
-            user = await unit_of_work.users.get_by_id(UserId(int(user_id)))
+            user = await unit_of_work.users.get_by_id(UserId.from_str(user_id))
             
             if not user:
                 raise HTTPException(
@@ -74,7 +74,7 @@ async def get_current_user_model(
             )
         
         # Get user directly from database as ORM model
-        user = db.query(UserModel).filter(UserModel.id == int(user_id)).first()
+        user = db.query(UserModel).filter(UserModel.id == user_id).first()
         
         if not user:
             raise HTTPException(
