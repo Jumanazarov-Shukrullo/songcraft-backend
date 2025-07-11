@@ -39,7 +39,7 @@ class ProcessPaymentWebhookUseCase:
                 # Find specific pending order by ID
                 from ...domain.value_objects.entity_ids import OrderId
                 
-                pending_order = await self.unit_of_work.orders.get_by_id(OrderId(int(order_id)))
+                pending_order = await self.unit_of_work.orders.get_by_id(OrderId.from_str(order_id))
                 
                 if not pending_order or pending_order.status != OrderStatus.PENDING:
                     return False

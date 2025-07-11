@@ -12,6 +12,9 @@ from app.core.config import settings
 from app.api.router import api_router
 from app.db.database import SessionLocal
 
+# Import all ORM models to ensure relationships are resolved
+import app.infrastructure.orm  # This imports all models from __init__.py
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

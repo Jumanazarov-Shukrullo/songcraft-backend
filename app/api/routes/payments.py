@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from typing import Optional
+from uuid import UUID
 
 from ...application.use_cases.create_order import CreateOrderUseCase
 from ...application.use_cases.process_payment_webhook import ProcessPaymentWebhookUseCase
@@ -24,7 +25,7 @@ class CreateCheckoutRequest(BaseModel):
 class CheckoutResponse(BaseModel):
     """Response with checkout URL"""
     checkout_url: str
-    order_id: int
+    order_id: UUID
     is_free: Optional[bool] = False
 
 
@@ -67,7 +68,8 @@ async def create_checkout(
             # Mark order as paid immediately for free products
             async with unit_of_work:
                 order_repo = unit_of_work.orders
-                order_entity = await order_repo.get_by_id(order.id)
+                from ...domain.value_objects.entity_ids import OrderId
+                order_entity = await order_repo.get_by_id(OrderId.from_str(str(order.id)))
                 if order_entity:
                     order_entity.mark_as_paid("FREE_PRODUCT")  # Use special payment ID for free
                     await order_repo.update(order_entity)
@@ -96,8 +98,8 @@ async def create_checkout(
             customer_email=str(current_user.email),
             product_type=request.product_type,
             custom_data={
-                "user_id": current_user.id.value,
-                "order_id": order.id,
+                "user_id": str(current_user.id.value),
+                "order_id": str(order.id),
                 "customer_name": str(current_user.email).split("@")[0]  # Extract name from email
             }
         )
