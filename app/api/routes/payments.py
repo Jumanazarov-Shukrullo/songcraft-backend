@@ -25,6 +25,7 @@ class CheckoutResponse(BaseModel):
     """Response with checkout URL"""
     checkout_url: str
     order_id: int
+    is_free: Optional[bool] = False
 
 
 @router.post("/create-checkout", response_model=CheckoutResponse)
@@ -34,7 +35,7 @@ async def create_checkout(
     unit_of_work = Depends(get_unit_of_work),
     payment_service = Depends(get_payment_service)
 ):
-    """Create checkout session for payment"""
+    """Create checkout session for payment or handle free orders"""
     try:
         # Validate product type
         if request.product_type not in ["audio_only", "audio_video"]:
@@ -46,11 +47,44 @@ async def create_checkout(
         # Convert to domain enum
         product_type = ProductType.AUDIO_ONLY if request.product_type == "audio_only" else ProductType.AUDIO_VIDEO
         
-        # Create order with configured pricing (currently $0 for both)
+        # Get pricing for product type
         amount = settings.AUDIO_PRICE if request.product_type == "audio_only" else settings.VIDEO_PRICE
+        
+        # Check if pricing is free (0 cents)
+        if amount == 0:
+            print(f"🆓 Free pricing detected for {request.product_type}, creating paid order directly")
+            
+            # Create order with free pricing
+            order_data = OrderCreateDTO(
+                product_type=product_type,
+                amount=amount,
+                currency="USD"
+            )
+            
+            create_order_use_case = CreateOrderUseCase(unit_of_work, payment_service)
+            order = await create_order_use_case.execute(order_data, current_user.id)
+            
+            # Mark order as paid immediately for free products
+            async with unit_of_work:
+                order_repo = unit_of_work.orders
+                order_entity = await order_repo.get_by_id(order.id)
+                if order_entity:
+                    order_entity.mark_as_paid("FREE_PRODUCT")  # Use special payment ID for free
+                    await order_repo.update(order_entity)
+                    await unit_of_work.commit()
+                    print(f"✅ Order {order.id} marked as paid (FREE)")
+            
+            # Return frontend URL for processing free order
+            return CheckoutResponse(
+                checkout_url=f"{settings.FRONTEND_URL}/payment/success?free=true&order_id={order.id}",
+                order_id=order.id,
+                is_free=True
+            )
+        
+        # Standard paid flow - create order and redirect to Dodo Payments
         order_data = OrderCreateDTO(
             product_type=product_type,
-            amount=amount,  # Amount in cents (AUDIO_PRICE=0, VIDEO_PRICE=0)
+            amount=amount,
             currency="USD"
         )
         
@@ -70,7 +104,8 @@ async def create_checkout(
         
         return CheckoutResponse(
             checkout_url=checkout_result["checkout_url"],
-            order_id=order.id
+            order_id=order.id,
+            is_free=False
         )
         
     except Exception as e:
