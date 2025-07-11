@@ -198,6 +198,25 @@ async def admin_respond_to_feedback(
         db.commit()
         db.refresh(feedback)
         
+        # Return enhanced response with user info for admin
+        if feedback.user_id:
+            user = db.query(UserModel).filter(UserModel.id == feedback.user_id).first()
+            if user:
+                return FeedbackResponse(
+                    id=feedback.id,
+                    subject=feedback.subject,
+                    message=feedback.message,
+                    category=feedback.category,
+                    status=feedback.status,
+                    admin_response=feedback.admin_response,
+                    created_at=feedback.created_at,
+                    updated_at=feedback.updated_at,
+                    user_id=feedback.user_id,
+                    user_email=user.email,
+                    user_name=f"{user.first_name} {user.last_name}".strip() if user.first_name else user.email,
+                    has_admin_response=bool(feedback.admin_response)
+                )
+        
         return FeedbackResponse.from_orm_with_extras(feedback)
         
     except Exception as e:
@@ -218,14 +237,43 @@ async def admin_get_all_feedback(
 ):
     """Admin endpoint to get all feedback with optional status filter."""
     try:
-        query = db.query(FeedbackModel)
+        query = db.query(FeedbackModel).outerjoin(UserModel, FeedbackModel.user_id == UserModel.id)
         
         if status_filter:
             query = query.filter(FeedbackModel.status == status_filter)
         
         feedback_list = query.order_by(FeedbackModel.created_at.desc()).offset(skip).limit(limit).all()
         
-        return [FeedbackResponse.from_orm_with_extras(feedback) for feedback in feedback_list]
+        # Create enhanced feedback responses with user info
+        result = []
+        for feedback in feedback_list:
+            # Get user info if feedback has a user_id
+            if feedback.user_id:
+                user = db.query(UserModel).filter(UserModel.id == feedback.user_id).first()
+                if user:
+                    response = FeedbackResponse(
+                        id=feedback.id,
+                        subject=feedback.subject,
+                        message=feedback.message,
+                        category=feedback.category,
+                        status=feedback.status,
+                        admin_response=feedback.admin_response,
+                        created_at=feedback.created_at,
+                        updated_at=feedback.updated_at,
+                        user_id=feedback.user_id,
+                        user_email=user.email,
+                        user_name=f"{user.first_name} {user.last_name}".strip() if user.first_name else user.email,
+                        has_admin_response=bool(feedback.admin_response)
+                    )
+                else:
+                    response = FeedbackResponse.from_orm_with_extras(feedback)
+            else:
+                # Anonymous feedback
+                response = FeedbackResponse.from_orm_with_extras(feedback)
+            
+            result.append(response)
+        
+        return result
         
     except Exception as e:
         raise HTTPException(
@@ -242,11 +290,29 @@ async def get_my_feedback_with_responses(
     """Get user's feedback that has admin responses (for notifications/updates)."""
     try:
         feedback = db.query(FeedbackModel).filter(
-            FeedbackModel.user_id == current_user.id,
-            FeedbackModel.admin_response.isnot(None)  # Only feedback with responses
+            FeedbackModel.user_id == current_user.id
         ).order_by(FeedbackModel.updated_at.desc()).all()
         
-        return [FeedbackResponse.from_orm_with_extras(f) for f in feedback]
+        # Return enhanced responses with user info
+        result = []
+        for f in feedback:
+            response = FeedbackResponse(
+                id=f.id,
+                subject=f.subject,
+                message=f.message,
+                category=f.category,
+                status=f.status,
+                admin_response=f.admin_response,
+                created_at=f.created_at,
+                updated_at=f.updated_at,
+                user_id=f.user_id,
+                user_email=current_user.email,
+                user_name=f"{current_user.first_name} {current_user.last_name}".strip() if current_user.first_name else current_user.email,
+                has_admin_response=bool(f.admin_response)
+            )
+            result.append(response)
+        
+        return result
         
     except Exception as e:
         raise HTTPException(
