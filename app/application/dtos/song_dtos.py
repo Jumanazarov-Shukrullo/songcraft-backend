@@ -3,6 +3,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 from ...domain.enums import MusicStyle, GenerationStatus, EmotionalTone
 
@@ -29,9 +30,9 @@ class CreateSongRequest(BaseModel):
 
 class SongResponse(BaseModel):
     """Response DTO for song data"""
-    id: int
-    user_id: int
-    order_id: int
+    id: UUID
+    user_id: UUID
+    order_id: UUID
     title: Optional[str] = None
     description: str
     music_style: str
@@ -64,7 +65,7 @@ class SongCreateDTO(BaseModel):
     """Alternative naming for backward compatibility"""
     description: str = Field(..., min_length=1, max_length=2000)
     music_style: MusicStyle
-    order_id: int
+    order_id: UUID
 
     class Config:
         use_enum_values = True
@@ -72,9 +73,9 @@ class SongCreateDTO(BaseModel):
 
 class SongResponseDTO(BaseModel):
     """Alternative naming for backward compatibility"""
-    id: int
-    user_id: int
-    order_id: int
+    id: UUID
+    user_id: UUID
+    order_id: UUID
     title: Optional[str] = None
     description: str
     music_style: str

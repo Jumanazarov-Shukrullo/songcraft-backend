@@ -45,7 +45,7 @@ class User:
     ) -> 'User':
         """Factory method to create a new user with proper defaults"""
         return cls(
-            id=UserId(0),  # Repository will assign real ID when persisting
+            id=UserId.generate(),  # Generate UUID for new user
             email=email,
             hashed_password=password,
             first_name=first_name,

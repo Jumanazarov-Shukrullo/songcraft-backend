@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 
 from ...domain.enums import OrderStatus, ProductType
 
@@ -20,8 +21,8 @@ class OrderCreateDTO(BaseModel):
 
 class OrderResponseDTO(BaseModel):
     """Response DTO for order data"""
-    id: int
-    user_id: int
+    id: UUID
+    user_id: UUID
     amount: float
     currency: str
     product_type: str

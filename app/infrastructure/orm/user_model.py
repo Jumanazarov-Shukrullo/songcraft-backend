@@ -3,6 +3,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import UUID
+from uuid import uuid4
 
 from ...db.models import Base
 from ...domain.enums import UserStatus, UserRole
@@ -11,7 +13,7 @@ from ...domain.enums import UserStatus, UserRole
 class UserModel(Base):
     __tablename__ = 'users'
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     first_name = Column(String, nullable=True)

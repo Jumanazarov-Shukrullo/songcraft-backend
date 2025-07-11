@@ -3,6 +3,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 
 class CreateUserDto(BaseModel):
@@ -59,7 +60,7 @@ class GoogleOAuthUrlResponse(BaseModel):
 
 class UserDto(BaseModel):
     """DTO for user response"""
-    id: int
+    id: UUID
     email: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None

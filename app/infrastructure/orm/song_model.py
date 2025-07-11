@@ -3,6 +3,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Float, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import UUID
+from uuid import uuid4
 
 from ...db.models import Base
 from ...domain.enums import MusicStyle, GenerationStatus, EmotionalTone
@@ -11,9 +13,9 @@ from ...domain.enums import MusicStyle, GenerationStatus, EmotionalTone
 class SongModel(Base):
     __tablename__ = 'songs'
     
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
-    order_id = Column(Integer, ForeignKey('orders.id'), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
+    order_id = Column(UUID(as_uuid=True), ForeignKey('orders.id'), nullable=False)
     
     # Basic song info
     title = Column(String, nullable=True)
@@ -56,8 +58,8 @@ class SongModel(Base):
 class SongImageModel(Base):
     __tablename__ = 'song_images'
     
-    id = Column(Integer, primary_key=True, index=True)
-    song_id = Column(Integer, ForeignKey('songs.id'), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    song_id = Column(UUID(as_uuid=True), ForeignKey('songs.id'), nullable=False)
     file_url = Column(String, nullable=False)
     filename = Column(String, nullable=False)
     order_index = Column(Integer, default=0)

@@ -75,8 +75,6 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = Field(default="", env="GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str = Field(default="", env="GOOGLE_CLIENT_SECRET")
     GOOGLE_REDIRECT_URI: str = Field(default="", env="GOOGLE_REDIRECT_URI")
-    # Dynamic Google redirect URI - constructed from FRONTEND_URL unless explicitly set
-
     
     # CORS
     ALLOWED_HOSTS: list[str] = Field(default=["http://localhost:3000"], env="ALLOWED_HOSTS")

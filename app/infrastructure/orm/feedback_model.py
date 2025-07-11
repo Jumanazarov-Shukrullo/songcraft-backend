@@ -1,5 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import UUID
+from uuid import uuid4
 from datetime import datetime
 from .user_model import Base
 
@@ -7,8 +9,8 @@ class FeedbackModel(Base):
     """User feedback model for storing user feedback and suggestions"""
     __tablename__ = "feedback"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Allow null for anonymous
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # Allow null for anonymous
     email = Column(String(255), nullable=True)  # For anonymous users
     name = Column(String(255), nullable=True)  # For anonymous users
     subject = Column(String(255), nullable=False)

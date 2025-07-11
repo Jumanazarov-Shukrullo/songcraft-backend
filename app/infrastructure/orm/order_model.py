@@ -3,6 +3,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import UUID
+from uuid import uuid4
 
 from ...db.models import Base
 from ...domain.enums import OrderStatus, ProductType
@@ -11,8 +13,8 @@ from ...domain.enums import OrderStatus, ProductType
 class OrderModel(Base):
     __tablename__ = 'orders'
     
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
     
     # Payment details (Lemon Squeezy + domain compatibility)
     lemon_squeezy_order_id = Column(String, unique=True, nullable=True)
@@ -38,8 +40,8 @@ class OrderModel(Base):
 class AuditLogModel(Base):
     __tablename__ = 'audit_logs'
     
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
     action = Column(String, nullable=False)
     resource_type = Column(String, nullable=True)
     resource_id = Column(String, nullable=True)
