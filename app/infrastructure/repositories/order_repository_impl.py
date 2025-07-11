@@ -51,8 +51,8 @@ class OrderRepositoryImpl(IOrderRepository):
         
         model_data = {
             'user_id': order.user_id.value,
-            'lemon_squeezy_order_id': order.lemon_squeezy_order_id,
-            'lemon_squeezy_payment_id': order.lemon_squeezy_payment_id,
+            'dodo_order_id': order.dodo_order_id,
+            'dodo_payment_id': order.dodo_payment_id,
             'product_type': product_type_value,
             'amount': order.amount.amount,
             'currency': order.amount.currency,
@@ -72,8 +72,8 @@ class OrderRepositoryImpl(IOrderRepository):
         order_with_id = Order(
             id=OrderId(model.id),
             user_id=order.user_id,
-            lemon_squeezy_order_id=order.lemon_squeezy_order_id,
-            lemon_squeezy_payment_id=order.lemon_squeezy_payment_id,
+            dodo_order_id=order.dodo_order_id,
+            dodo_payment_id=order.dodo_payment_id,
             product_type=order.product_type,
             amount=order.amount,
             status=order.status,
@@ -94,7 +94,7 @@ class OrderRepositoryImpl(IOrderRepository):
 
     async def get_by_payment_provider_id(self, provider_id: str) -> Optional[Order]:
         """Get order by payment provider ID"""
-        model = self.session.query(OrderModel).filter(OrderModel.lemon_squeezy_order_id == provider_id).first()
+        model = self.session.query(OrderModel).filter(OrderModel.dodo_order_id == provider_id).first()
         return self._map_to_entity(model) if model else None
 
     async def count(self) -> int:
@@ -136,8 +136,8 @@ class OrderRepositoryImpl(IOrderRepository):
         
         return OrderModel(
             user_id=order.user_id.value,
-            lemon_squeezy_order_id=order.lemon_squeezy_order_id,
-            lemon_squeezy_payment_id=order.lemon_squeezy_payment_id,
+            dodo_order_id=order.dodo_order_id,
+            dodo_payment_id=order.dodo_payment_id,
             product_type=product_type_value,
             amount=order.amount.amount,
             currency=order.amount.currency,
@@ -153,8 +153,8 @@ class OrderRepositoryImpl(IOrderRepository):
         product_type_value = order.product_type.value if hasattr(order.product_type, 'value') else str(order.product_type)
         status_value = order.status.value if hasattr(order.status, 'value') else str(order.status)
         
-        model.lemon_squeezy_order_id = order.lemon_squeezy_order_id
-        model.lemon_squeezy_payment_id = order.lemon_squeezy_payment_id
+        model.dodo_order_id = order.dodo_order_id
+        model.dodo_payment_id = order.dodo_payment_id
         model.product_type = product_type_value
         model.amount = order.amount.amount
         model.currency = order.amount.currency
@@ -170,8 +170,8 @@ class OrderRepositoryImpl(IOrderRepository):
         return Order(
             id=OrderId(model.id),
             user_id=UserId(model.user_id),
-            lemon_squeezy_order_id=model.lemon_squeezy_order_id,
-            lemon_squeezy_payment_id=model.lemon_squeezy_payment_id,
+            dodo_order_id=model.dodo_order_id,
+            dodo_payment_id=model.dodo_payment_id,
             product_type=ProductType(model.product_type),
             amount=Money(model.amount, model.currency),
             status=OrderStatus(model.status),

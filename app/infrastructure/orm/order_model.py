@@ -16,9 +16,9 @@ class OrderModel(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False, index=True)
     
-    # Payment details (Lemon Squeezy + domain compatibility)
-    lemon_squeezy_order_id = Column(String, unique=True, nullable=True)
-    lemon_squeezy_payment_id = Column(String, unique=True, nullable=True)
+    # Payment details (Dodo Payments + domain compatibility)
+    dodo_order_id = Column(String, unique=True, nullable=True)
+    dodo_payment_id = Column(String, unique=True, nullable=True)
     payment_provider_id = Column(String, nullable=True, index=True)  # For domain model compatibility
     
     # Order details

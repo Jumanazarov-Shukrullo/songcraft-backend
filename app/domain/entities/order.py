@@ -20,8 +20,8 @@ class Order:
     
     # Payment provider fields
     payment_provider_id: Optional[str] = None
-    lemon_squeezy_order_id: Optional[str] = None
-    lemon_squeezy_payment_id: Optional[str] = None
+    dodo_order_id: Optional[str] = None
+    dodo_payment_id: Optional[str] = None
     
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
@@ -37,9 +37,9 @@ class Order:
         
         self.status = OrderStatus.PAID
         self.payment_provider_id = payment_provider_id
-        # For Lemon Squeezy, use the same ID for both fields
-        self.lemon_squeezy_order_id = payment_provider_id
-        self.lemon_squeezy_payment_id = payment_provider_id
+        # For Dodo Payments, use the same ID for both fields
+        self.dodo_order_id = payment_provider_id
+        self.dodo_payment_id = payment_provider_id
         self.updated_at = datetime.utcnow()
         
         self._events.append(OrderPaid(

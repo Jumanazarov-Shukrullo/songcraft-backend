@@ -306,7 +306,7 @@ async def get_all_orders(
                 "product_type": order.product_type.value,
                 "status": order.status.value,
                 "payment_method": "stripe",  # Default for now
-                "payment_id": order.lemon_squeezy_order_id,
+                "payment_id": order.dodo_order_id,
                 "song_id": song.id if song else None,
                 "song_title": song.title if song else None,
                 "created_at": order.created_at,
