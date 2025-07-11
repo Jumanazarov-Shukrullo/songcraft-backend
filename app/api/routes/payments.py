@@ -121,7 +121,7 @@ async def create_checkout(
                     song_response = await create_song_use_case.execute(
                         song_request, 
                         user_int_id, 
-                        int(order.id)
+                        str(order.id)  # Pass as UUID string, not integer
                     )
                     
                     song_id = song_response.id
@@ -240,7 +240,7 @@ async def payment_webhook(
                         print(f"✅ Webhook song request validated successfully")
                         
                         create_song_use_case = CreateSongFromOrderUseCase(unit_of_work, ai_service)
-                        song_response = await create_song_use_case.execute(song_request, int(user_id), int(order_id))
+                        song_response = await create_song_use_case.execute(song_request, int(user_id), order_id)  # Pass order_id as string, not int
                         
                         print(f"✅ Song {song_response.id} created for paid order {order_id}")
                         

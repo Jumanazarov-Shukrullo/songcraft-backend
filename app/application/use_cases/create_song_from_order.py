@@ -18,12 +18,12 @@ class CreateSongFromOrderUseCase:
         self.unit_of_work = unit_of_work
         self.ai_service = ai_service
     
-    async def execute(self, song_data: CreateSongRequest, user_id: int, order_id: int) -> SongResponse:
+    async def execute(self, song_data: CreateSongRequest, user_id: int, order_id: str) -> SongResponse:
         """Create a song from an existing paid order"""
         async with self.unit_of_work:
             # 1. Verify the order exists and is paid
             order_repo = self.unit_of_work.orders
-            existing_order = await order_repo.get_by_id(OrderId(order_id))
+            existing_order = await order_repo.get_by_id(OrderId.from_str(order_id))
             
             if not existing_order:
                 raise ValueError(f"Order {order_id} not found")
