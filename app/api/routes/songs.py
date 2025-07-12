@@ -107,9 +107,9 @@ async def create_song(
 ):
     """Create a new song"""
     use_case = CreateSongUseCase(unit_of_work, ai_service)
-    # current_user.id is a UserId value object – we need the raw integer
-    user_int_id = current_user.id.value if hasattr(current_user.id, "value") else int(current_user.id)
-    return await use_case.execute(song_data, user_int_id)
+    # current_user.id is a UserId value object – we need the UUID string
+    user_id_str = str(current_user.id.value) if hasattr(current_user.id, "value") else str(current_user.id)
+    return await use_case.execute(song_data, user_id_str)
 
 
 @router.post("/from-order", response_model=SongResponse)
@@ -135,9 +135,9 @@ async def create_song_from_order(
         song_data = CreateSongRequest(**song_data_dict)
         
         use_case = CreateSongFromOrderUseCase(unit_of_work, ai_service)
-        user_int_id = current_user.id.value if hasattr(current_user.id, "value") else int(current_user.id)
+        user_id_str = str(current_user.id.value) if hasattr(current_user.id, "value") else str(current_user.id)
         
-        return await use_case.execute(song_data, user_int_id, order_id)
+        return await use_case.execute(song_data, user_id_str, order_id)
         
     except ValueError as e:
         raise HTTPException(

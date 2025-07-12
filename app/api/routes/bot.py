@@ -74,7 +74,9 @@ async def create_song_for_bot(
     ai_service = AIService()
     try:
         use_case = CreateSongUseCase(uow, ai_service)
-        song_resp = await use_case.execute(req, user_id=internal_user_id)
+        # Convert UUID to string for the use case
+        user_id_str = str(internal_user_id)
+        song_resp = await use_case.execute(req, user_id=user_id_str)
         return song_resp
     finally:
         session.close()

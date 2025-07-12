@@ -39,7 +39,7 @@ class ProcessPaymentUseCase:
             from ...domain.value_objects.entity_ids import UserId
             from ...domain.enums import OrderStatus
             
-            orders = await self.unit_of_work.orders.get_by_user_id(UserId(int(user_id)))
+            orders = await self.unit_of_work.orders.get_by_user_id(UserId.from_str(user_id))
             pending_order = next(
                 (o for o in orders if o.status == OrderStatus.PENDING),
                 None

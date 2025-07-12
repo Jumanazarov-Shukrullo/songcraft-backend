@@ -179,9 +179,9 @@ class SongRepositoryImpl(ISongRepository):
         duration = Duration(model.duration) if model.duration else None
         
         return Song(
-            id=SongId(model.id),
-            user_id=UserId(model.user_id),
-            order_id=OrderId(model.order_id),
+            id=SongId(model.id),  # model.id is already a UUID from the database
+            user_id=UserId(model.user_id),  # model.user_id is already a UUID from the database
+            order_id=OrderId(model.order_id),  # model.order_id is already a UUID from the database
             title=model.title,
             description=model.description or "",
             music_style=MusicStyle(model.music_style) if model.music_style else None,

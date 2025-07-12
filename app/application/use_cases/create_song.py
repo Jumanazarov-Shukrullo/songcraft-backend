@@ -29,17 +29,19 @@ class CreateSongUseCase:
     async def execute(self, song_data: CreateSongRequest, user_id: Union[int, UserId]) -> SongResponse:
         """Execute the create song use case - creates a free order and song"""
         async with self.unit_of_work:
-            # Handle user_id - it might already be a UserId object or an integer
+            # Handle user_id - it might already be a UserId object or a string/integer
             if isinstance(user_id, UserId):
                 user_id_obj = user_id
             else:
-                user_id_obj = UserId(user_id)
+                # Convert to string first, then create UserId from string
+                user_id_str = str(user_id)
+                user_id_obj = UserId.from_str(user_id_str)
             
             # 1. Create a free order for direct song creation (backwards compatibility)
             order_repo = self.unit_of_work.orders
-            # Temporary placeholder ID (will be replaced after flush)
+            # Generate proper UUID for the order
             order = Order(
-                id=OrderId(1),
+                id=OrderId.generate(),
                 user_id=user_id_obj,
                 product_type=ProductType.AUDIO_ONLY,
                 amount=Money(Decimal(0)),
@@ -63,7 +65,7 @@ class CreateSongUseCase:
                         tone_enum = None
 
             song = Song(
-                id=SongId(1),  # Placeholder, will be updated by repository
+                id=SongId.generate(),  # Generate proper UUID for the song
                 user_id=user_id_obj,
                 order_id=saved_order.id,
                 title=song_data.title,

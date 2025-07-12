@@ -184,7 +184,7 @@ class GoogleOAuthRedirectUseCase:
             else:
                 # Create new user from Google info
                 user = User(
-                    id=UserId(0),  # Repository will assign real ID
+                    id=UserId.generate(),  # Generate proper UUID instead of using integer 0
                     email=email_vo,
                     hashed_password="google_oauth",  # Placeholder for OAuth users
                     first_name=first_name,
