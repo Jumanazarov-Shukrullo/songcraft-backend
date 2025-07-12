@@ -2,7 +2,7 @@
 
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 import json
@@ -307,16 +307,17 @@ async def download_audio(
                 response = await client.get(song.audio_url.url)
                 response.raise_for_status()
             
+            # Log file details for debugging
+            logging.info(f"Audio download: user_id={current_user.id.value}, song_id={song_id}, title='{song.title}', file_size={len(response.content)} bytes, content_type={response.headers.get('content-type', 'unknown')}")
+            
             # Generate safe filename
             safe_title = "".join(c for c in (song.title or f"song_{song_id}") if c.isalnum() or c in (' ', '-', '_')).rstrip()
             filename = f"{safe_title}.mp3"
             
-            # Log the download
-            logging.info(f"Audio download: user_id={current_user.id.value}, song_id={song_id}, title='{song.title}', filename='{filename}'")
-            
             # Return file with download headers
-            return StreamingResponse(
-                iter([response.content]),
+            from fastapi.responses import Response
+            return Response(
+                content=response.content,
                 media_type="audio/mpeg",
                 headers={
                     "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}",
@@ -362,16 +363,16 @@ async def download_video(
                 response = await client.get(song.video_url.url)
                 response.raise_for_status()
             
+            # Log file details for debugging
+            logging.info(f"Video download: user_id={current_user.id.value}, song_id={song_id}, title='{song.title}', file_size={len(response.content)} bytes, content_type={response.headers.get('content-type', 'unknown')}")
+            
             # Generate safe filename
             safe_title = "".join(c for c in (song.title or f"song_{song_id}") if c.isalnum() or c in (' ', '-', '_')).rstrip()
             filename = f"{safe_title}.mp4"
             
-            # Log the download
-            logging.info(f"Video download: user_id={current_user.id.value}, song_id={song_id}, title='{song.title}', filename='{filename}'")
-            
             # Return file with download headers
-            return StreamingResponse(
-                iter([response.content]),
+            return Response(
+                content=response.content,
                 media_type="video/mp4",
                 headers={
                     "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}",
