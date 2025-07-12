@@ -17,7 +17,7 @@ class UploadSongImagesUseCase:
     
     async def execute(
         self,
-        song_id: int,
+        song_id: str,  # Changed from int to str for UUID
         images: List[UploadFile],
         user_id,
     ) -> List[str]:
@@ -25,8 +25,8 @@ class UploadSongImagesUseCase:
 
         Parameters
         ----------
-        song_id : int
-            ID of the song that the images belong to.
+        song_id : str
+            UUID string of the song that the images belong to.
         images : List[UploadFile]
             The images uploaded from the client (FastAPI UploadFile objects).
         user_id : int | UserId
@@ -34,13 +34,19 @@ class UploadSongImagesUseCase:
         """
         async with self.unit_of_work:
             # Fetch the song and verify ownership
-            song = await self.unit_of_work.songs.get_by_id(SongId(song_id))
+            song = await self.unit_of_work.songs.get_by_id(SongId.from_str(song_id))  # Use from_str for UUID string
             if not song:
                 raise ValueError("Song not found")
 
-            # Normalize user id to int for comparison
-            normalized_user_id = user_id.value if hasattr(user_id, "value") else int(user_id)
-            if song.user_id.value != normalized_user_id:
+            # Normalize user id to UUID for comparison
+            if hasattr(user_id, "value"):
+                user_uuid = user_id.value
+            else:
+                # Convert string/int to UUID
+                from ...domain.value_objects.entity_ids import UserId
+                user_uuid = UserId.from_str(str(user_id)).value
+            
+            if song.user_id.value != user_uuid:
                 raise ValueError("Not authorized to modify this song")
 
             uploaded_urls: List[str] = []

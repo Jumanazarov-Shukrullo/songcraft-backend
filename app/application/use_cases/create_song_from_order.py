@@ -1,6 +1,7 @@
 """Create Song from Existing Order Use Case"""
 
 from decimal import Decimal
+from uuid import UUID
 from ...domain.entities.song import Song
 from ...domain.value_objects.entity_ids import SongId, UserId, OrderId
 from ...domain.value_objects.song_content import Lyrics, AudioUrl, Duration
@@ -204,7 +205,7 @@ class CreateSongFromOrderUseCase:
                 title=saved_song.title
             )
 
-    def _start_immediate_check(self, song_id: int, generation_id: str) -> None:
+    def _start_immediate_check(self, song_id: UUID, generation_id: str) -> None:
         """Start immediate background check for Mureka completion"""
         import asyncio
         from concurrent.futures import ThreadPoolExecutor
@@ -234,14 +235,13 @@ class CreateSongFromOrderUseCase:
         # Run in background
         asyncio.create_task(immediate_check())
 
-    async def _update_completed_song(self, song_id: int, status_result: dict) -> None:
+    async def _update_completed_song(self, song_id: UUID, status_result: dict) -> None:
         """Update song when generation is completed"""
         try:
             async with self.unit_of_work:
                 song_repo = self.unit_of_work.songs
-                from ...domain.value_objects.entity_ids import SongId
                 
-                song = await song_repo.get_by_id(SongId(song_id))
+                song = await song_repo.get_by_id(SongId(song_id))  # song_id is already UUID
                 if not song:
                     print(f"❌ Song {song_id} not found for completion update")
                     return
@@ -276,16 +276,99 @@ class CreateSongFromOrderUseCase:
                 
         except Exception as e:
             print(f"❌ Error updating completed song {song_id}: {e}")
+            import traceback
+            traceback.print_exc()
 
-    def _start_background_polling(self, song_id: int, generation_id: str) -> None:
-        """Start background polling for generation completion"""
+    def _start_background_polling(self, song_id: UUID, generation_id: str) -> None:
+        """Start background task to poll for completion and update song when done"""
         import asyncio
         
         async def poll_and_update():
-            # Implementation similar to the original but simplified for this use case
-            print(f"🔄 Starting background polling for song {song_id}, generation {generation_id}")
-            # Add polling logic here if needed
-            pass
+            try:
+                print(f"🔄 Starting background polling for song {song_id}, generation {generation_id}")
+                
+                # Wait before starting polling - songs typically take 2-5 minutes  
+                await asyncio.sleep(20)  # Initial 20s delay before first poll
+                
+                # Continue polling until completion
+                final_result = await self.ai_service.poll_generation_completion(generation_id)
+                
+                print(f"📋 Background polling result for song {song_id}: {final_result}")
+                
+                # Update the song in database
+                async with self.unit_of_work:
+                    song_repo = self.unit_of_work.songs
+                    song = await song_repo.get_by_id(SongId(song_id))  # song_id is already UUID
+                    
+                    if not song:
+                        print(f"❌ Song {song_id} not found for update")
+                        return
+                    
+                    if final_result.get('status') == 'completed' and final_result.get('audio_url'):
+                        print(f"✅ Updating song {song_id} with completed audio")
+                        print(f"🎧 Audio URL: {final_result.get('audio_url')}")
+                        
+                        # Update song with completed audio
+                        song.complete_audio_generation(
+                            AudioUrl(final_result['audio_url']),
+                            Duration(final_result.get('duration', 180))
+                        )
+                        
+                        # Also update video if available
+                        if final_result.get('video_url'):
+                            from ...domain.value_objects.song_content import VideoUrl
+                            song.video_url = VideoUrl(final_result['video_url'])
+                            song.video_status = GenerationStatus.COMPLETED
+                            print(f"🎬 Video URL: {final_result.get('video_url')}")
+                        
+                        await song_repo.update(song)
+                        await self.unit_of_work.commit()
+                        
+                        print(f"💾 Song {song_id} successfully updated in database")
+                        
+                        # Broadcast completion to frontend
+                        await broadcaster.notify(song_id, {
+                            "audio_status": song.audio_status.value,
+                            "video_status": song.video_status.value,
+                            "status": song.generation_status.value,
+                            "audio_url": final_result['audio_url'],
+                            "video_url": final_result.get('video_url'),
+                            "duration": final_result.get('duration', 180),
+                            "title": song.title,
+                            "message": "🎉 Your song is ready! You can now download it."
+                        })
+                        
+                        print(f"📡 Completion notification sent for song {song_id}")
+                    else:
+                        print(f"❌ Background polling failed for song {song_id}: {final_result}")
+                        
+                        # Mark as failed
+                        song.audio_status = GenerationStatus.FAILED
+                        song.video_status = GenerationStatus.FAILED
+                        await song_repo.update(song)
+                        await self.unit_of_work.commit()
+                        
+                        await broadcaster.notify(song_id, {
+                            "audio_status": song.audio_status.value,
+                            "video_status": song.video_status.value,
+                            "status": song.generation_status.value,
+                            "error": final_result.get('error', 'Generation failed'),
+                            "title": song.title
+                        })
+                        
+            except Exception as e:
+                print(f"❌ Error in background polling for song {song_id}: {e}")
+                import traceback
+                traceback.print_exc()
         
-        # Run in background
-        asyncio.create_task(poll_and_update()) 
+        # Start the background polling task
+        loop = asyncio.get_event_loop()
+        task = loop.create_task(poll_and_update())
+        
+        # Add task reference to prevent garbage collection
+        if not hasattr(self, '_polling_tasks'):
+            self._polling_tasks = set()
+        self._polling_tasks.add(task)
+        task.add_done_callback(self._polling_tasks.discard)
+        
+        print(f"🚀 Background polling task started for song {song_id}") 

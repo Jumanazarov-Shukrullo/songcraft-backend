@@ -17,6 +17,7 @@ from ...infrastructure.repositories.unit_of_work_impl import UnitOfWorkImpl
 from ...db.database import SessionLocal
 from ...application.dtos.song_dtos import CreateSongRequest, SongResponse
 from ...api.event_broadcaster import broadcaster
+from uuid import UUID
 
 
 class CreateSongUseCase:
@@ -218,7 +219,7 @@ class CreateSongUseCase:
                 title=saved_song.title
             )
 
-    def _start_immediate_check(self, song_id: int, generation_id: str) -> None:
+    def _start_immediate_check(self, song_id: UUID, generation_id: str) -> None:
         """Start immediate background check for Mureka completion"""
         async def immediate_check():
             try:
@@ -267,7 +268,7 @@ class CreateSongUseCase:
         
         print(f"🚀 Immediate check task started for song {song_id}")
 
-    async def _update_completed_song(self, song_id: int, status_result: dict) -> None:
+    async def _update_completed_song(self, song_id: UUID, status_result: dict) -> None:
         """Helper method to update a completed song in the database"""
         try:
             print(f"✅ Song {song_id} completed! Updating database...")
@@ -278,7 +279,7 @@ class CreateSongUseCase:
                 unit_of_work = UnitOfWorkImpl(session)
                 async with unit_of_work:
                     song_repo = unit_of_work.songs
-                    song = await song_repo.get_by_id(SongId(song_id))
+                    song = await song_repo.get_by_id(SongId(song_id))  # song_id is already UUID
                     
                     if not song:
                         print(f"❌ Song {song_id} not found")
@@ -330,7 +331,7 @@ class CreateSongUseCase:
             import traceback
             traceback.print_exc()
 
-    def _start_background_polling(self, song_id: int, generation_id: str) -> None:
+    def _start_background_polling(self, song_id: UUID, generation_id: str) -> None:
         """Start background task to poll for completion and update song when done"""
         async def poll_and_update():
             try:
@@ -351,7 +352,7 @@ class CreateSongUseCase:
                     unit_of_work = UnitOfWorkImpl(session)
                     async with unit_of_work:
                         song_repo = unit_of_work.songs
-                        song = await song_repo.get_by_id(SongId(song_id))
+                        song = await song_repo.get_by_id(SongId(song_id))  # song_id is already UUID
                         
                         if not song:
                             print(f"❌ Song {song_id} not found for update")
@@ -377,7 +378,7 @@ class CreateSongUseCase:
                             await song_repo.update(song)
                             await unit_of_work.commit()
                             
-                            print(f"💾 Song {song_id} updated in database with completed status")
+                            print(f"💾 Song {song_id} successfully updated in database")
                             
                             # Broadcast completion to frontend
                             await broadcaster.notify(song_id, {
@@ -391,19 +392,16 @@ class CreateSongUseCase:
                                 "message": "🎉 Your song is ready! You can now download it."
                             })
                             
-                            print(f"📡 Broadcasted completion notification for song {song_id}")
-                            
-                        elif final_result.get('status') == 'failed':
-                            print(f"❌ Marking song {song_id} as failed: {final_result.get('error', 'Unknown error')}")
+                            print(f"📡 Completion notification sent for song {song_id}")
+                        else:
+                            print(f"❌ Background polling failed for song {song_id}: {final_result}")
                             
                             # Mark as failed
                             song.audio_status = GenerationStatus.FAILED
                             song.video_status = GenerationStatus.FAILED
-                            
                             await song_repo.update(song)
                             await unit_of_work.commit()
                             
-                            # Broadcast failure
                             await broadcaster.notify(song_id, {
                                 "audio_status": song.audio_status.value,
                                 "video_status": song.video_status.value,
@@ -411,46 +409,28 @@ class CreateSongUseCase:
                                 "error": final_result.get('error', 'Generation failed'),
                                 "title": song.title
                             })
-                        else:
-                            # Still processing - leave as is, frontend will show processing status
-                            print(f"⏳ Song {song_id} still processing after polling")
-                            await broadcaster.notify(song_id, {
-                                "message": "🎵 Your song is still being created. Please check back in a few minutes.",
-                                "title": song.title,
-                                "estimated_completion_minutes": 5
-                            })
                             
                 except Exception as e:
-                    print(f"❌ Error updating song {song_id} in database: {e}")
+                    print(f"❌ Error during background polling update for song {song_id}: {e}")
                     import traceback
                     traceback.print_exc()
                 finally:
                     session.close()
-                        
+                    
             except Exception as e:
                 print(f"❌ Error in background polling for song {song_id}: {e}")
                 import traceback
                 traceback.print_exc()
-                
-                # On error, notify that generation might still be processing
-                try:
-                    await broadcaster.notify(song_id, {
-                        "message": "🎵 Your song is being created. Please check your Dashboard in a few minutes.",
-                        "title": "Song Generation",
-                        "estimated_completion_minutes": 5
-                    })
-                except Exception as broadcast_error:
-                    print(f"❌ Failed to broadcast error notification: {broadcast_error}")
         
-        # Start the background task with explicit task creation
+        # Start the background polling task
         import asyncio
         loop = asyncio.get_event_loop()
         task = loop.create_task(poll_and_update())
         
         # Add task reference to prevent garbage collection
-        if not hasattr(self, '_background_tasks'):
-            self._background_tasks = set()
-        self._background_tasks.add(task)
-        task.add_done_callback(self._background_tasks.discard)
+        if not hasattr(self, '_polling_tasks'):
+            self._polling_tasks = set()
+        self._polling_tasks.add(task)
+        task.add_done_callback(self._polling_tasks.discard)
         
         print(f"🚀 Background polling task started for song {song_id}") 

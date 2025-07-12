@@ -153,7 +153,7 @@ async def create_song_from_order(
 
 @router.post("/{song_id}/images")
 async def upload_song_images(
-    song_id: int,
+    song_id: str,  # Changed from int to str for UUID
     images: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user),
     unit_of_work = Depends(get_unit_of_work),
@@ -168,39 +168,44 @@ async def upload_song_images(
 
 @router.get("/{song_id}", response_model=SongResponse)
 async def get_song(
-    song_id: int,
+    song_id: str,  # Changed from int to str for UUID
     current_user: User = Depends(get_current_user),
     unit_of_work = Depends(get_unit_of_work)
 ):
     """Get song by ID"""
-    song_repo = unit_of_work.songs
-    song = await song_repo.get_by_id(SongId(song_id))
-    
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-    
-    # Check if user owns this song
-    if song.user_id.value != current_user.id.value:
-        raise HTTPException(status_code=403, detail="Not authorized to access this song")
-    
-    # Convert to response DTO
-    return SongResponse(
-        id=song.id.value,
-        user_id=song.user_id.value,
-        order_id=song.order_id.value,
-        title=song.title,
-        description=song.description,
-        music_style=song.music_style.value,
-        status=song.generation_status.value,
-        lyrics_status=song.lyrics_status.value,
-        audio_status=song.audio_status.value,
-        video_status=song.video_status.value,
-        lyrics=song.lyrics.content if song.lyrics else None,
-        audio_url=song.audio_url.url if song.audio_url else None,
-        video_url=song.video_url.url if song.video_url else None,
-        duration=song.duration.duration if song.duration else None,
-        created_at=song.created_at
-    )
+    try:
+        song_repo = unit_of_work.songs
+        song = await song_repo.get_by_id(SongId.from_str(song_id))  # Use from_str instead of direct construction
+        
+        if not song:
+            raise HTTPException(status_code=404, detail="Song not found")
+        
+        # Check if user owns this song
+        if song.user_id.value != current_user.id.value:
+            raise HTTPException(status_code=403, detail="Not authorized to access this song")
+        
+        # Convert to response DTO
+        return SongResponse(
+            id=song.id.value,
+            user_id=song.user_id.value,
+            order_id=song.order_id.value,
+            title=song.title,
+            description=song.description,
+            music_style=song.music_style.value if song.music_style else None,
+            status=song.generation_status.value,
+            lyrics_status=song.lyrics_status.value,
+            audio_status=song.audio_status.value,
+            video_status=song.video_status.value,
+            lyrics=song.lyrics.content if song.lyrics else None,
+            audio_url=song.audio_url.url if song.audio_url else None,
+            video_url=song.video_url.url if song.video_url else None,
+            duration=song.duration.duration if song.duration else None,
+            created_at=song.created_at
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid song ID format: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/", response_model=List[SongResponse])
@@ -242,129 +247,140 @@ async def songs_health():
 
 
 @router.get("/{song_id}/stream")
-async def stream_song_updates(song_id: int):
+async def stream_song_updates(song_id: str):  # Changed from int to str for UUID
     """Server-Sent Events stream for live song status updates."""
+    
+    try:
+        # Convert string UUID to UUID object for broadcasting
+        song_uuid = SongId.from_str(song_id)
+        queue = await broadcaster.subscribe(song_uuid.value)
 
-    queue = await broadcaster.subscribe(song_id)
-
-    async def event_generator():
-        try:
-            # send an initial ping so the connection opens
-            yield {
-                "event": "ping",
-                "data": json.dumps({"song_id": song_id})
-            }
-            while True:
-                payload = await queue.get()
+        async def event_generator():
+            try:
+                # send an initial ping so the connection opens
                 yield {
-                    "event": "update",
-                    "data": json.dumps(payload)
+                    "event": "ping",
+                    "data": json.dumps({"song_id": song_id})
                 }
-        except asyncio.CancelledError:
-            await broadcaster.unsubscribe(song_id, queue)
+                while True:
+                    payload = await queue.get()
+                    yield {
+                        "event": "update",
+                        "data": json.dumps(payload)
+                    }
+            except asyncio.CancelledError:
+                await broadcaster.unsubscribe(song_uuid.value, queue)
 
-    return EventSourceResponse(event_generator())
+        return EventSourceResponse(event_generator())
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid song ID format: {str(e)}")
 
 
 @router.get("/{song_id}/download/audio")
 async def download_audio(
-    song_id: int,
+    song_id: str,  # Changed from int to str for UUID
     current_user: User = Depends(get_current_user),
     unit_of_work = Depends(get_unit_of_work)
 ):
     """Download audio file for a song"""
-    song_repo = unit_of_work.songs
-    song = await song_repo.get_by_id(SongId(song_id))
-    
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-    
-    # Check if user owns this song
-    if song.user_id.value != current_user.id.value:
-        raise HTTPException(status_code=403, detail="Not authorized to download this song")
-    
-    # Check if audio is available
-    if not song.audio_url or not song.audio_url.url:
-        raise HTTPException(status_code=404, detail="Audio file not available")
-    
-    if song.audio_status.value != "completed":
-        raise HTTPException(status_code=400, detail="Audio generation not completed")
-    
     try:
-        # Fetch the file from the audio URL
-        async with httpx.AsyncClient() as client:
-            response = await client.get(song.audio_url.url)
-            response.raise_for_status()
+        song_repo = unit_of_work.songs
+        song = await song_repo.get_by_id(SongId.from_str(song_id))  # Use from_str instead of direct construction
         
-        # Generate safe filename
-        safe_title = "".join(c for c in (song.title or f"song_{song_id}") if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        filename = f"{safe_title}.mp3"
+        if not song:
+            raise HTTPException(status_code=404, detail="Song not found")
         
-        # Log the download
-        logging.info(f"Audio download: user_id={current_user.id.value}, song_id={song_id}, title='{song.title}', filename='{filename}'")
+        # Check if user owns this song
+        if song.user_id.value != current_user.id.value:
+            raise HTTPException(status_code=403, detail="Not authorized to download this song")
         
-        # Return file with download headers
-        return StreamingResponse(
-            iter([response.content]),
-            media_type="audio/mpeg",
-            headers={
-                "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}",
-                "Content-Length": str(len(response.content))
-            }
-        )
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch audio file: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+        # Check if audio is available
+        if not song.audio_url or not song.audio_url.url:
+            raise HTTPException(status_code=404, detail="Audio file not available")
+        
+        if song.audio_status.value != "completed":
+            raise HTTPException(status_code=400, detail="Audio generation not completed")
+        
+        try:
+            # Fetch the file from the audio URL
+            async with httpx.AsyncClient() as client:
+                response = await client.get(song.audio_url.url)
+                response.raise_for_status()
+            
+            # Generate safe filename
+            safe_title = "".join(c for c in (song.title or f"song_{song_id}") if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            filename = f"{safe_title}.mp3"
+            
+            # Log the download
+            logging.info(f"Audio download: user_id={current_user.id.value}, song_id={song_id}, title='{song.title}', filename='{filename}'")
+            
+            # Return file with download headers
+            return StreamingResponse(
+                iter([response.content]),
+                media_type="audio/mpeg",
+                headers={
+                    "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}",
+                    "Content-Length": str(len(response.content))
+                }
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch audio file: {str(e)}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid song ID format: {str(e)}")
 
 
 @router.get("/{song_id}/download/video")
 async def download_video(
-    song_id: int,
+    song_id: str,  # Changed from int to str for UUID
     current_user: User = Depends(get_current_user),
     unit_of_work = Depends(get_unit_of_work)
 ):
     """Download video file for a song"""
-    song_repo = unit_of_work.songs
-    song = await song_repo.get_by_id(SongId(song_id))
-    
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-    
-    # Check if user owns this song
-    if song.user_id.value != current_user.id.value:
-        raise HTTPException(status_code=403, detail="Not authorized to download this song")
-    
-    # Check if video is available
-    if not song.video_url or not song.video_url.url:
-        raise HTTPException(status_code=404, detail="Video file not available")
-    
-    if song.video_status.value != "completed":
-        raise HTTPException(status_code=400, detail="Video generation not completed")
-    
     try:
-        # Fetch the file from the video URL
-        async with httpx.AsyncClient() as client:
-            response = await client.get(song.video_url.url)
-            response.raise_for_status()
+        song_repo = unit_of_work.songs
+        song = await song_repo.get_by_id(SongId.from_str(song_id))  # Use from_str instead of direct construction
         
-        # Generate safe filename
-        safe_title = "".join(c for c in (song.title or f"song_{song_id}") if c.isalnum() or c in (' ', '-', '_')).rstrip()
-        filename = f"{safe_title}.mp4"
+        if not song:
+            raise HTTPException(status_code=404, detail="Song not found")
         
-        # Log the download
-        logging.info(f"Video download: user_id={current_user.id.value}, song_id={song_id}, title='{song.title}', filename='{filename}'")
+        # Check if user owns this song
+        if song.user_id.value != current_user.id.value:
+            raise HTTPException(status_code=403, detail="Not authorized to download this song")
         
-        # Return file with download headers
-        return StreamingResponse(
-            iter([response.content]),
-            media_type="video/mp4",
-            headers={
-                "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}",
-                "Content-Length": str(len(response.content))
-            }
-        )
-    except httpx.RequestError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch video file: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+        # Check if video is available
+        if not song.video_url or not song.video_url.url:
+            raise HTTPException(status_code=404, detail="Video file not available")
+        
+        if song.video_status.value != "completed":
+            raise HTTPException(status_code=400, detail="Video generation not completed")
+        
+        try:
+            # Fetch the file from the video URL
+            async with httpx.AsyncClient() as client:
+                response = await client.get(song.video_url.url)
+                response.raise_for_status()
+            
+            # Generate safe filename
+            safe_title = "".join(c for c in (song.title or f"song_{song_id}") if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            filename = f"{safe_title}.mp4"
+            
+            # Log the download
+            logging.info(f"Video download: user_id={current_user.id.value}, song_id={song_id}, title='{song.title}', filename='{filename}'")
+            
+            # Return file with download headers
+            return StreamingResponse(
+                iter([response.content]),
+                media_type="video/mp4",
+                headers={
+                    "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}",
+                    "Content-Length": str(len(response.content))
+                }
+            )
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch video file: {str(e)}")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid song ID format: {str(e)}")

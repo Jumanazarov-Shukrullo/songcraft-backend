@@ -39,22 +39,27 @@ async def payment_webhook(
 
 @router.get("/{order_id}", response_model=OrderResponseDTO)
 async def get_order(
-    order_id: int,
+    order_id: str,  # Changed from int to str for UUID
     current_user: User = Depends(get_current_user),
     unit_of_work = Depends(get_unit_of_work)
 ):
     """Get order by ID"""
-    order_repo = unit_of_work.orders
-    order = await order_repo.get_by_id(OrderId(order_id))
-    
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    # Check if user owns this order
-    if order.user_id.value != current_user.id.value:
-        raise HTTPException(status_code=403, detail="Not authorized to access this order")
-    
-    return OrderResponseDTO.from_entity(order)
+    try:
+        order_repo = unit_of_work.orders
+        order = await order_repo.get_by_id(OrderId.from_str(order_id))  # Use from_str for UUID string
+        
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # Check if user owns this order
+        if order.user_id.value != current_user.id.value:
+            raise HTTPException(status_code=403, detail="Not authorized to access this order")
+        
+        return OrderResponseDTO.from_entity(order)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid order ID format: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/", response_model=List[OrderResponseDTO])

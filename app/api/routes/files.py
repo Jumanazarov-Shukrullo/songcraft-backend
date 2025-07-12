@@ -64,7 +64,7 @@ async def upload_images(
 
 @router.post("/songs/{song_id}/images")
 async def upload_song_images(
-    song_id: int,
+    song_id: str,  # Changed from int to str for UUID
     images: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user),
     unit_of_work = Depends(get_unit_of_work),
