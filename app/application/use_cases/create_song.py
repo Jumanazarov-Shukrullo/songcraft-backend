@@ -37,20 +37,6 @@ class CreateSongUseCase:
                 # Convert to string first, then create UserId from string
                 user_id_str = str(user_id)
                 user_id_obj = UserId.from_str(user_id_str)
-                
-            # Check and consume user's song credit
-            user_repo = self.unit_of_work.users
-            user = await user_repo.get_by_id(user_id_obj)
-            if not user:
-                raise ValueError("User not found")
-                
-            if not user.has_song_credits():
-                raise ValueError("No song credits available. Please purchase credits to create a song.")
-                
-            # Consume one credit
-            user.consume_song_credit()
-            await user_repo.update(user)
-            print(f"💳 Consumed 1 credit for user {user_id_obj.value}. Remaining credits: {user.song_credits}")
             
             # 1. Create a free order for direct song creation (backwards compatibility)
             order_repo = self.unit_of_work.orders
