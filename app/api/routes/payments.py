@@ -202,51 +202,35 @@ async def payment_webhook(
         result = await use_case.execute(body, signature)
         
         if result:
-            # For paid orders, also trigger song creation if song_data was provided
+            # For paid orders, add 5 song credits to the user
             try:
                 webhook_data = json.loads(body.decode())
                 payment_data = webhook_data.get("data", {})
                 custom_data = payment_data.get("custom_data", {})
                 
-                if custom_data.get("song_data"):
-                    print(f"🎵 Creating song for paid order after webhook")
+                user_id = custom_data.get("user_id")
+                order_id = custom_data.get("order_id")
+                
+                if user_id:
+                    print(f"💳 Adding 5 song credits to user {user_id} for paid order {order_id}")
                     
-                    song_data = json.loads(custom_data["song_data"])
-                    order_id = custom_data.get("order_id")
-                    user_id = custom_data.get("user_id")
-                    
-                    print(f"🎯 Webhook song data: {song_data}")
-                    
-                    if order_id and user_id and song_data:
-                        # Validate and clean tone value
-                        tone_value = song_data.get("tone")
-                        valid_tones = ["emotional", "romantic", "playful", "ironic"]
-                        if tone_value and tone_value not in valid_tones:
-                            print(f"⚠️ Invalid tone '{tone_value}', setting to None")
-                            tone_value = None
+                    # Add 5 credits to the user
+                    async with unit_of_work:
+                        user_repo = unit_of_work.users
+                        from ...domain.value_objects.entity_ids import UserId
                         
-                        # Create song from the paid order
-                        song_request = CreateSongRequest(
-                            title=song_data.get("title", "Untitled Song"),
-                            story=song_data.get("story") or song_data.get("description", ""),
-                            style=song_data.get("style", "pop"),
-                            lyrics=song_data.get("lyrics", ""),
-                            recipient_description=song_data.get("recipient_description", ""),
-                            occasion_description=song_data.get("occasion_description", ""),
-                            additional_details=song_data.get("additional_details", ""),
-                            tone=tone_value
-                        )
-                        
-                        print(f"✅ Webhook song request validated successfully")
-                        
-                        create_song_use_case = CreateSongFromOrderUseCase(unit_of_work, ai_service)
-                        song_response = await create_song_use_case.execute(song_request, user_id, order_id)  # Pass user_id as UUID string, not int
-                        
-                        print(f"✅ Song {song_response.id} created for paid order {order_id}")
+                        user = await user_repo.get_by_id(UserId.from_str(user_id))
+                        if user:
+                            user.add_song_credits(5)  # Add 5 credits for payment
+                            await user_repo.update(user)
+                            await unit_of_work.commit()
+                            print(f"✅ Added 5 credits to user {user_id}. New balance: {user.song_credits}")
+                        else:
+                            print(f"❌ User {user_id} not found for credit addition")
                         
             except Exception as e:
-                print(f"❌ Error creating song for paid order: {e}")
-                # Continue - webhook processed successfully even if song creation failed
+                print(f"❌ Error adding credits for paid order: {e}")
+                # Continue - webhook processed successfully even if credit addition failed
             
             return {"status": "success"}
         else:

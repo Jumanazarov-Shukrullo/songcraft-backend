@@ -24,5 +24,6 @@ async def get_current_user_profile(
         role=current_user.role.value,
         email_verified=current_user.email_verified,
         created_at=current_user.created_at,
-        last_login=current_user.last_login
+        last_login=current_user.last_login,
+        song_credits=current_user.song_credits
     ) 

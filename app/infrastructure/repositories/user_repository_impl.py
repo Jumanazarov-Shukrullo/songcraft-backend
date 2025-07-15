@@ -81,7 +81,8 @@ class UserRepositoryImpl(IUserRepository):
             'password_reset_used': user.password_reset_used,
             'created_at': user.created_at,
             'updated_at': user.updated_at,
-            'last_login': user.last_login
+            'last_login': user.last_login,
+            'song_credits': user.song_credits
         }
         
         model = UserModel(**model_data)
@@ -104,7 +105,8 @@ class UserRepositoryImpl(IUserRepository):
             password_reset_used=user.password_reset_used,
             created_at=user.created_at,
             updated_at=user.updated_at,
-            last_login=user.last_login
+            last_login=user.last_login,
+            song_credits=user.song_credits
         )
         
         return user_with_id
@@ -158,7 +160,8 @@ class UserRepositoryImpl(IUserRepository):
             'password_reset_used': user.password_reset_used,
             'created_at': user.created_at,
             'updated_at': user.updated_at,
-            'last_login': user.last_login
+            'last_login': user.last_login,
+            'song_credits': user.song_credits
         }
         
         # Only set ID if it exists (for updates)
@@ -182,6 +185,7 @@ class UserRepositoryImpl(IUserRepository):
         model.password_reset_used = user.password_reset_used
         model.updated_at = user.updated_at
         model.last_login = user.last_login
+        model.song_credits = user.song_credits
 
     def _map_to_entity(self, model: UserModel) -> User:
         """Map ORM model to domain entity"""
@@ -200,5 +204,6 @@ class UserRepositoryImpl(IUserRepository):
             password_reset_used=getattr(model, 'password_reset_used', False),
             created_at=model.created_at,
             updated_at=model.updated_at,
-            last_login=model.last_login
+            last_login=model.last_login,
+            song_credits=getattr(model, 'song_credits', 0)
         ) 

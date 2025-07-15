@@ -32,6 +32,9 @@ class User:
     updated_at: datetime = field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
     
+    # Credit tracking for song generation
+    song_credits: int = 0
+    
     # Domain events
     _events: List = field(default_factory=list, init=False)
     
@@ -136,6 +139,26 @@ class User:
     def record_login(self) -> None:
         """Record user login"""
         self.last_login = datetime.utcnow()
+    
+    def add_song_credits(self, credits: int) -> None:
+        """Business logic: add song generation credits"""
+        if credits <= 0:
+            raise ValueError("Credits must be positive")
+        
+        self.song_credits += credits
+        self.updated_at = datetime.utcnow()
+    
+    def consume_song_credit(self) -> None:
+        """Business logic: consume one song generation credit"""
+        if self.song_credits <= 0:
+            raise ValueError("No song credits available")
+        
+        self.song_credits -= 1
+        self.updated_at = datetime.utcnow()
+    
+    def has_song_credits(self) -> bool:
+        """Check if user has available song credits"""
+        return self.song_credits > 0
     
     @property
     def full_name(self) -> str:

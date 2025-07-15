@@ -32,6 +32,9 @@ class UserModel(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime, nullable=True)
     
+    # Credit tracking for song generation
+    song_credits = Column(Integer, default=0, nullable=False)
+    
     # Relationships
     orders = relationship('OrderModel', back_populates='user')
     songs = relationship('SongModel', back_populates='user')

@@ -69,6 +69,7 @@ class UserDto(BaseModel):
     email_verified: bool
     created_at: datetime
     last_login: Optional[datetime] = None
+    song_credits: int = 0
 
 
 class TokenDto(BaseModel):
