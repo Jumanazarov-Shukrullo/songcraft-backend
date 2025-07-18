@@ -47,7 +47,7 @@ async def create_song_for_bot(
     # ------------------------------------------------------------------
     try:
         # Use deterministic email to find / create user
-        tg_email = f"tg-{telegram_id}@bot.songcraft"
+        tg_email = f"tg-{telegram_id}@bot.lyrzy"
         user = session.query(UserModel).filter(UserModel.email == tg_email).first()
         if not user:
             user = UserModel(

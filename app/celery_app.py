@@ -3,7 +3,7 @@ from .core.config import settings
 
 # Create Celery instance
 celery_app = Celery(
-    "songcraft",
+    "lyrzy",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
     include=["app.tasks"]

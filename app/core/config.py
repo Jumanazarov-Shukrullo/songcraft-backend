@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     
     # API Configuration
     API_V1_PREFIX: str = "/api/v1"
-    PROJECT_NAME: str = "SongCraft"
+    PROJECT_NAME: str = "Lyrzy"
     VERSION: str = "1.0.0"
     DESCRIPTION: str = "Personalized Song Generation Platform"
     
@@ -61,8 +61,8 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = Field(..., env="SMTP_USERNAME")
     SMTP_PASSWORD: str = Field(..., env="SMTP_PASSWORD")
     SMTP_USE_TLS: bool = Field(default=True, env="SMTP_USE_TLS")
-    FROM_EMAIL: str = Field(default="noreply@songcraft.app", env="FROM_EMAIL")
-    FROM_NAME: str = Field(default="SongCraft", env="FROM_NAME")
+    FROM_EMAIL: str = Field(default="noreply@lyrzy.com", env="FROM_EMAIL")
+    FROM_NAME: str = Field(default="Lyrzy", env="FROM_NAME")
     
     # MinIO File Storage
     MINIO_ENDPOINT: str = Field(default="localhost:9000", env="MINIO_ENDPOINT")

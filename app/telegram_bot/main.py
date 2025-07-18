@@ -1,4 +1,4 @@
-"""SongCraft Telegram Bot (aiogram 3.x)
+"""Lyrzy Telegram Bot (aiogram 3.x)
 -------------------------------------------------
 Async, scalable Telegram bot that lets users create personalized songs via
 conversation.  Designed to handle many concurrent users thanks to aiogram's
@@ -53,7 +53,7 @@ if not BOT_TOKEN:
 ADMIN_IDS: List[int] = [int(uid) for uid in os.getenv("TELEGRAM_ADMIN_IDS", "").split(",") if uid.strip()]
 
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger("songcraft.bot")
+logger = logging.getLogger("lyrzy.bot")
 
 # ---------------------------------------------------------------------------
 # State Machine ----------------------------------------------------------------
@@ -149,7 +149,7 @@ async def _send_typing(bot: Bot, chat_id: int, stop_event: asyncio.Event):
 async def cmd_start(message: Message):
     known_user_ids.add(message.from_user.id)
     await message.answer(
-        "🎵 <b>Welcome to SongCraft!</b>\n"
+        "🎵 <b>Welcome to Lyrzy!</b>\n"
         "I can craft personalized songs for you.\n"
         "Send /create to get started.",
         parse_mode="HTML",

@@ -776,7 +776,7 @@ async def get_settings(
         "email": {
             "smtp_enabled": bool(settings.SMTP_HOST),
             "from_email": settings.FROM_EMAIL,
-            "support_email": "support@songcraft.com"
+            "support_email": "support@lyrzy.com"
         },
         "storage": {
             "max_file_size_mb": 50,

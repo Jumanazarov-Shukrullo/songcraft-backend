@@ -40,30 +40,49 @@ class PaymentService:
             # Extract customer info - convert Email object to string first
             email_str = str(customer_email)
             customer_name = (custom_data or {}).get("customer_name", email_str.split("@")[0])
+            payment_method = (custom_data or {}).get("payment_method", "international")
             
             print(f"🔗 Creating payment with product ID: {product_id}")
             print(f"👤 Customer: {email_str}")
+            print(f"💳 Payment method: {payment_method}")
+            
+            # Determine billing country based on payment method
+            if payment_method == "mir":
+                billing_country = "RU"  # Russia for MIR cards
+                print("🇷🇺 Using MIR payment method for Russian users")
+            else:
+                billing_country = "US"  # Default to US for international cards
             
             # Create payment using Dodo Payments SDK
-            payment = self.client.payments.create(
-                payment_link=True,
-                billing={
+            payment_data = {
+                "payment_link": True,
+                "billing": {
                     "city": "N/A",
-                    "country": "US", 
+                    "country": billing_country, 
                     "state": "N/A",
                     "street": "N/A",
                     "zipcode": 0
                 },
-                customer={
+                "customer": {
                     "email": email_str,
                     "name": customer_name
                 },
-                product_cart=[{
+                "product_cart": [{
                     "product_id": product_id,
                     "quantity": 1
                 }],
-                return_url=f"{settings.FRONTEND_URL}/payment/success"
-            )
+                "return_url": f"{settings.FRONTEND_URL}/payment/success"
+            }
+            
+            # Add payment method specific settings if needed
+            if payment_method == "mir":
+                # Add any MIR-specific configuration here
+                payment_data["metadata"] = {
+                    "payment_method": "mir",
+                    "country": "RU"
+                }
+            
+            payment = self.client.payments.create(**payment_data)
             
             # Extract payment link and ID from response
             payment_link = payment.payment_link

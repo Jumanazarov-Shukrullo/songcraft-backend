@@ -20,15 +20,15 @@ import app.infrastructure.orm  # This imports all models from __init__.py
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup - migrations handle database schema
-    print("Starting SongCraft API with DDD architecture...")
+    print("Starting Lyrzy API with DDD architecture...")
     yield
     # Shutdown
-    print("Shutting down SongCraft API...")
+    print("Shutting down Lyrzy API...")
 
 
 # Create FastAPI app
 app = FastAPI(
-    title="SongCraft API",
+    title="Lyrzy API",
     description="AI-powered personalized song generation platform with DDD architecture",
     version="1.0.0",
     lifespan=lifespan
@@ -50,7 +50,7 @@ app.include_router(api_router, prefix="/api/v1")
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {"message": "SongCraft API with DDD Architecture", "version": "1.0.0"}
+    return {"message": "Lyrzy API with DDD Architecture", "version": "1.0.0"}
 
 
 @app.get("/health")
