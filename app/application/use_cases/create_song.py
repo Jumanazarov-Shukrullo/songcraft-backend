@@ -38,7 +38,21 @@ class CreateSongUseCase:
                 user_id_str = str(user_id)
                 user_id_obj = UserId.from_str(user_id_str)
             
-            # 1. Create a free order for direct song creation (backwards compatibility)
+            # 1. Check and consume user's song credit before creating song
+            user_repo = self.unit_of_work.users
+            user = await user_repo.get_by_id(user_id_obj)
+            if not user:
+                raise ValueError("User not found")
+                
+            if not user.has_song_credits():
+                raise ValueError("No song credits available. Please purchase credits to create a song.")
+                
+            # Consume one credit
+            user.consume_song_credit()
+            await user_repo.update(user)
+            print(f"💳 Consumed 1 credit for user {user_id_obj.value}. Remaining credits: {user.song_credits}")
+            
+            # 2. Create a free order for direct song creation (backwards compatibility)
             order_repo = self.unit_of_work.orders
             # Generate proper UUID for the order
             order = Order(
@@ -50,7 +64,7 @@ class CreateSongUseCase:
             )
             saved_order = await order_repo.add(order)
 
-            # 2. Create song entity linked to this order
+            # 3. Create song entity linked to this order
             style_enum = song_data.music_style if isinstance(song_data.music_style, MusicStyle) else MusicStyle(song_data.music_style)
             
             # Convert tone string to enum if provided
@@ -79,7 +93,7 @@ class CreateSongUseCase:
                 tone=tone_enum,
             )
 
-            # 2a. Lyrics handling
+            # 3a. Lyrics handling
             if song_data.lyrics:
                 # Client already provided lyrics – mark as completed
                 lyrics_vo = Lyrics(song_data.lyrics)
@@ -104,7 +118,7 @@ class CreateSongUseCase:
                     "lyrics": ai_lyrics
                 })
 
-            # 2b. Title handling – use client title if provided else generate
+            # 3b. Title handling – use client title if provided else generate
             if song_data.title:
                 song.title = song_data.title
             else:
