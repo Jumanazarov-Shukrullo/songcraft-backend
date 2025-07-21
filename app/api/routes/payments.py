@@ -191,9 +191,41 @@ async def payment_webhook(
 ):
     """Handle payment webhooks from Dodo Payments"""
     try:
-        # Get raw body and signature
+        # Get raw body and all relevant headers
         body = await request.body()
-        signature = request.headers.get("webhook-signature", "")
+        
+        # Check all possible webhook signature headers that Dodo Payments might use
+        signature_headers = {
+            "webhook-signature": request.headers.get("webhook-signature", ""),
+            "x-webhook-signature": request.headers.get("x-webhook-signature", ""),
+            "dodo-signature": request.headers.get("dodo-signature", ""),
+            "signature": request.headers.get("signature", ""),
+            "authorization": request.headers.get("authorization", "")
+        }
+        
+        print(f"📨 Webhook received:")
+        print(f"   Body size: {len(body)} bytes")
+        print(f"   Content-Type: {request.headers.get('content-type', 'unknown')}")
+        print(f"   User-Agent: {request.headers.get('user-agent', 'unknown')}")
+        print(f"   All signature headers: {signature_headers}")
+        
+        # Try to find the signature in various headers
+        signature = ""
+        signature_source = ""
+        for header_name, header_value in signature_headers.items():
+            if header_value:
+                signature = header_value
+                signature_source = header_name
+                break
+        
+        if signature:
+            print(f"   Using signature from header: {signature_source}")
+        else:
+            print(f"   ⚠️ No signature found in any header")
+        
+        # Log the body content for debugging (first 500 chars)
+        body_preview = body.decode('utf-8', errors='ignore')[:500]
+        print(f"   Body preview: {body_preview}")
         
         # Process webhook
         from ...application.use_cases.process_payment_webhook import ProcessPaymentWebhookUseCase
@@ -202,36 +234,7 @@ async def payment_webhook(
         result = await use_case.execute(body, signature)
         
         if result:
-            # For paid orders, add 5 song credits to the user
-            try:
-                webhook_data = json.loads(body.decode())
-                payment_data = webhook_data.get("data", {})
-                custom_data = payment_data.get("custom_data", {})
-                
-                user_id = custom_data.get("user_id")
-                order_id = custom_data.get("order_id")
-                
-                if user_id:
-                    print(f"💳 Adding 5 song credits to user {user_id} for paid order {order_id}")
-                    
-                    # Add 5 credits to the user
-                    async with unit_of_work:
-                        user_repo = unit_of_work.users
-                        from ...domain.value_objects.entity_ids import UserId
-                        
-                        user = await user_repo.get_by_id(UserId.from_str(user_id))
-                        if user:
-                            user.add_song_credits(5)  # Add 5 credits for payment
-                            await user_repo.update(user)
-                            await unit_of_work.commit()
-                            print(f"✅ Added 5 credits to user {user_id}. New balance: {user.song_credits}")
-                        else:
-                            print(f"❌ User {user_id} not found for credit addition")
-                        
-            except Exception as e:
-                print(f"❌ Error adding credits for paid order: {e}")
-                # Continue - webhook processed successfully even if credit addition failed
-            
+            # Webhook processed successfully - credits were already added in the use case
             return {"status": "success"}
         else:
             raise HTTPException(
@@ -241,6 +244,8 @@ async def payment_webhook(
             
     except Exception as e:
         print(f"❌ Error processing webhook: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process webhook: {str(e)}"

@@ -60,6 +60,21 @@ class ProcessPaymentWebhookUseCase:
                 # Mark order as paid
                 pending_order.mark_as_paid(payment_id)
                 await self.unit_of_work.orders.update(pending_order)
+                
+                # Add credits to user for paid orders
+                print(f"💳 Adding 5 song credits to user {user_id} for paid order {order_id}")
+                
+                user_repo = self.unit_of_work.users
+                user = await user_repo.get_by_id(UserId.from_str(user_id))
+                if user:
+                    old_credits = user.song_credits
+                    user.add_song_credits(5)  # Add 5 credits for payment
+                    await user_repo.update(user)
+                    print(f"✅ Added 5 credits to user {user_id}. Credits: {old_credits} → {user.song_credits}")
+                else:
+                    print(f"❌ User {user_id} not found for credit addition")
+                    # Don't fail the webhook for this - order was still processed
+                
                 await self.unit_of_work.commit()
                 
                 print(f"✅ Order {order_id} marked as paid with payment_id: {payment_id}")
