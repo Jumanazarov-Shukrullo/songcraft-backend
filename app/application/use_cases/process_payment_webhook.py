@@ -14,10 +14,10 @@ class ProcessPaymentWebhookUseCase:
         self.unit_of_work = unit_of_work
         self.payment_service = payment_service
     
-    async def execute(self, payload: bytes, signature: str) -> bool:
+    async def execute(self, payload: bytes, signature: str, request_headers: dict = None) -> bool:
         """Process payment webhook from payment provider"""
         # Verify webhook signature (sync method, don't await)
-        is_valid = self.payment_service.verify_webhook(payload, signature)
+        is_valid = self.payment_service.verify_webhook(payload, signature, request_headers or {})
         if not is_valid:
             print("❌ Webhook signature verification failed")
             return False

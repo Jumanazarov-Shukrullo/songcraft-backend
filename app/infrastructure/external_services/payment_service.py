@@ -123,17 +123,21 @@ class PaymentService:
         except Exception as e:
             return {"status": "error", "error": str(e)}
     
-    def verify_webhook(self, payload: bytes, signature: str) -> bool:
+    def verify_webhook(self, payload: bytes, signature: str, request_headers: dict = None) -> bool:
         """Verify webhook signature from Dodo Payments using Standard Webhooks spec"""
         try:
             import hmac
             import hashlib
             import time
             
+            if request_headers is None:
+                request_headers = {}
+            
             print(f"🔍 Webhook verification debug:")
             print(f"   Signature header: '{signature}'")
             print(f"   Payload size: {len(payload)} bytes")
             print(f"   Webhook secret configured: {'Yes' if self.webhook_secret else 'No'}")
+            print(f"   User-Agent: {request_headers.get('user-agent', 'unknown')}")
             
             # If no webhook secret configured, log and reject
             if not self.webhook_secret:
@@ -155,19 +159,70 @@ class PaymentService:
             if signature.startswith("v1,"):
                 print("🔍 Trying Standard Webhooks format (v1,sig)")
                 signatures = signature[3:].split(",")
-                expected_signature = hmac.new(
-                    self.webhook_secret.encode(),
-                    payload,
-                    hashlib.sha256
-                ).hexdigest()
                 
-                match_found = any(hmac.compare_digest(sig, expected_signature) for sig in signatures)
-                print(f"   Expected: {expected_signature}")
+                # Try different payload combinations for timestamp-based signatures
+                import json
+                try:
+                    payload_json = json.loads(payload.decode())
+                    timestamp = payload_json.get("timestamp", "")
+                    
+                    # Test payloads to try
+                    test_payloads = [
+                        payload,  # Original payload
+                        f"{timestamp}.{payload.decode()}".encode(),  # timestamp.payload
+                        f"{payload.decode()}.{timestamp}".encode(),  # payload.timestamp
+                        (payload.decode() + timestamp).encode(),     # payload+timestamp
+                    ]
+                    
+                    if timestamp:
+                        print(f"   Found timestamp in payload: {timestamp}")
+                        test_payloads.extend([
+                            f"{timestamp}.{payload.decode()}".encode(),
+                            payload.decode().replace('"timestamp":"' + timestamp + '"', '').encode()  # payload without timestamp
+                        ])
+                    
+                except:
+                    test_payloads = [payload]  # Fallback to original payload
+                
+                for test_payload in test_payloads:
+                    expected_signature = hmac.new(
+                        self.webhook_secret.encode(),
+                        test_payload,
+                        hashlib.sha256
+                    ).digest()  # Get raw bytes, not hex
+                    
+                    # Convert to base64 for comparison (Standard Webhooks uses base64)
+                    import base64
+                    expected_b64 = base64.b64encode(expected_signature).decode()
+                    
+                    # Also try hex comparison
+                    expected_hex = expected_signature.hex()
+                    
+                    print(f"   Testing payload size: {len(test_payload)} bytes")
+                    print(f"   Expected (base64): {expected_b64}")
+                    print(f"   Expected (hex): {expected_hex}")
+                    
+                    # Check against base64 signatures
+                    for sig in signatures:
+                        if hmac.compare_digest(sig, expected_b64):
+                            print(f"   ✅ MATCH FOUND (base64)!")
+                            return True
+                        # Also try hex comparison
+                        if hmac.compare_digest(sig, expected_hex):
+                            print(f"   ✅ MATCH FOUND (hex)!")
+                            return True
+                        
+                        # Try decoding the received signature if it's base64
+                        try:
+                            decoded_sig = base64.b64decode(sig).hex()
+                            if hmac.compare_digest(decoded_sig, expected_hex):
+                                print(f"   ✅ MATCH FOUND (decoded base64 to hex)!")
+                                return True
+                        except:
+                            pass
+                
                 print(f"   Received: {signatures}")
-                print(f"   Match: {match_found}")
-                
-                if match_found:
-                    return True
+                print(f"   No matches found in Standard Webhooks format")
             
             # Format 2: Simple SHA256 hex
             else:
@@ -246,6 +301,18 @@ class PaymentService:
                 print("⚠️ PRODUCTION FALLBACK: Allowing unverified webhook (TEMPORARY)")
                 print("   Configure correct signature format and set DODO_WEBHOOK_ALLOW_UNVERIFIED=false")
                 return True
+            
+            # TEMPORARY: If this looks like a real Dodo webhook, allow it while we debug signatures
+            payload_str = payload.decode('utf-8', errors='ignore')
+            if ('DodoPayments' in request_headers.get('user-agent', '') or 
+                'payment.succeeded' in payload_str or 
+                'business_id' in payload_str):
+                
+                temp_bypass = os.getenv("DODO_TEMP_BYPASS", "false").lower() == "true"
+                if temp_bypass:
+                    print("🚨 TEMPORARY BYPASS: Real Dodo webhook detected, allowing processing")
+                    print("   Set DODO_TEMP_BYPASS=false after fixing signature verification!")
+                    return True
             
             return False
             

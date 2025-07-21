@@ -231,7 +231,8 @@ async def payment_webhook(
         from ...application.use_cases.process_payment_webhook import ProcessPaymentWebhookUseCase
         use_case = ProcessPaymentWebhookUseCase(unit_of_work, payment_service)
         
-        result = await use_case.execute(body, signature)
+        # Pass headers to the webhook processing for better debugging
+        result = await use_case.execute(body, signature, dict(request.headers))
         
         if result:
             # Webhook processed successfully - credits were already added in the use case
