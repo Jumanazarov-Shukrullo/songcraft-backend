@@ -37,6 +37,11 @@ class MusicStyle(str, Enum):
     JAZZ = "jazz"
     FUNK = "funk"
     ACOUSTIC = "acoustic"
+    LO_FI_CHILL = "lo-fi_chill"
+    POP_PUNK = "pop_punk"
+    COUNTRY = "country"
+    EIGHTIES_SYNTHWAVE = "80s_synthwave"
+    CUSTOM = "custom"
 
 
 class GenerationStatus(str, Enum):
