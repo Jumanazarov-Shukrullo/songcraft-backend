@@ -7,6 +7,7 @@ from ...api.dependencies import get_unit_of_work, get_email_service
 from ...application.use_cases.register_user import RegisterUserUseCase
 from ...application.use_cases.login_user import LoginUserUseCase
 from ...application.use_cases.forgot_password_use_case import ForgotPasswordUseCase
+from ...application.use_cases.reset_password_use_case import ResetPasswordUseCase, ResetPasswordDto
 from ...application.use_cases.email_verification_use_case import EmailVerificationUseCase
 from ...application.use_cases.google_oauth_use_case import GoogleOAuthUseCase
 from ...application.use_cases.google_oauth_redirect_use_case import GoogleOAuthRedirectUseCase
@@ -66,6 +67,22 @@ async def forgot_password(
             message="If an account with that email exists, a password reset link has been sent.",
             success=True
         )
+
+
+@router.post("/reset-password", response_model=ForgotPasswordResponse)
+async def reset_password(
+    request: ResetPasswordDto,
+    unit_of_work: IUnitOfWork = Depends(get_unit_of_work)
+):
+    """Reset password with token"""
+    use_case = ResetPasswordUseCase(unit_of_work)
+    try:
+        return await use_case.execute(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Error in reset password endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/verify-email")

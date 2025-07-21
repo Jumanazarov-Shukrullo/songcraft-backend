@@ -33,9 +33,8 @@ class ResetPasswordUseCase:
             # TODO: Add proper repository method for finding by reset token
             
             try:
-                # This is a simplified approach - in production you'd have proper indexes
-                # and repository methods for this
-                user = None  # We need to implement get_by_reset_token in repository
+                # Use the existing get_by_reset_token method from repository
+                user = await user_repo.get_by_reset_token(request.token)
                 
                 if not user:
                     return ForgotPasswordResponse(
@@ -43,22 +42,20 @@ class ResetPasswordUseCase:
                         success=False
                     )
                 
-                # Validate token (check expiration, used status)
+                # Additional validation (get_by_reset_token already checks expiration and used status)
                 if (not user.password_reset_token or 
                     user.password_reset_token != request.token or
-                    user.password_reset_used or
-                    (user.password_reset_expires_at and 
-                     datetime.utcnow() > user.password_reset_expires_at)):
+                    user.password_reset_used):
                     return ForgotPasswordResponse(
                         message="Invalid or expired reset token.",
                         success=False
                     )
                 
-                # Update password
+                # Update password and mark token as used
                 user.hashed_password = get_password_hash(request.new_password)
                 user.password_reset_token = None
                 user.password_reset_expires_at = None
-                user.password_reset_used = False
+                user.password_reset_used = True  # Mark as used
                 user.updated_at = datetime.utcnow()
                 
                 # Save changes
