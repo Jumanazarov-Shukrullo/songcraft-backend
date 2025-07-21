@@ -17,8 +17,8 @@ class ProcessPaymentUseCase:
     
     async def process_webhook(self, payload: bytes, signature: str) -> bool:
         """Process payment webhook"""
-        # Verify webhook signature
-        is_valid = await self.payment_service.verify_webhook(payload, signature)
+        # Verify webhook signature (sync method, don't await)
+        is_valid = self.payment_service.verify_webhook(payload, signature)
         if not is_valid:
             return False
         

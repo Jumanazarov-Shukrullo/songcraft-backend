@@ -47,7 +47,7 @@ class ForgotPasswordUseCase:
             try:
                 # Send password reset email
                 await self.email_service.send_password_reset_email(
-                    to_email=user.email,
+                    to_email=user.email.value,  # Fix: Use .value to get string
                     reset_token=reset_token
                 )
                 
