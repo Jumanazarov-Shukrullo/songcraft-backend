@@ -73,11 +73,23 @@ async def create_song_for_bot(
     uow = UnitOfWorkImpl(session)
     ai_service = AIService()
     try:
+        # Give Telegram bot users some credits first
+        if user.song_credits == 0:
+            user.song_credits = 1  # Give 1 credit for bot users
+            session.commit()
+            logger.info(f"Gave 1 credit to Telegram user {telegram_id}")
+        
         use_case = CreateSongUseCase(uow, ai_service)
         # Convert UUID to string for the use case
         user_id_str = str(internal_user_id)
         song_resp = await use_case.execute(req, user_id=user_id_str)
         return song_resp
+    except ValueError as e:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create song: {str(e)}")
     finally:
         session.close()
 

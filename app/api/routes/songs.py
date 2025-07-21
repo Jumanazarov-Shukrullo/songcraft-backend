@@ -106,10 +106,23 @@ async def create_song(
     ai_service = Depends(get_ai_service)
 ):
     """Create a new song"""
-    use_case = CreateSongUseCase(unit_of_work, ai_service)
-    # current_user.id is a UserId value object – we need the UUID string
-    user_id_str = str(current_user.id.value) if hasattr(current_user.id, "value") else str(current_user.id)
-    return await use_case.execute(song_data, user_id_str)
+    try:
+        use_case = CreateSongUseCase(unit_of_work, ai_service)
+        # current_user.id is a UserId value object – we need the UUID string
+        user_id_str = str(current_user.id.value) if hasattr(current_user.id, "value") else str(current_user.id)
+        return await use_case.execute(song_data, user_id_str)
+    except ValueError as e:
+        # Handle business logic errors (like insufficient credits)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        # Handle unexpected errors
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create song: {str(e)}"
+        )
 
 
 @router.post("/from-order", response_model=SongResponse)
