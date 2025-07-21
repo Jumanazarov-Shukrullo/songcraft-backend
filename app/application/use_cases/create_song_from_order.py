@@ -37,19 +37,14 @@ class CreateSongFromOrderUseCase:
             if existing_order.user_id.value != user_id_obj.value:
                 raise ValueError(f"Order {order_id} does not belong to user {user_id}")
 
-            # Check and consume user's song credit
+            # For paid orders, the payment already grants the right to create songs
+            # No need to check or consume credits since this is from a paid order
             user_repo = self.unit_of_work.users
             user = await user_repo.get_by_id(user_id_obj)
             if not user:
                 raise ValueError("User not found")
-                
-            if not user.has_song_credits():
-                raise ValueError("No song credits available. Please purchase credits to create a song.")
-                
-            # Consume one credit
-            user.consume_song_credit()
-            await user_repo.update(user)
-            print(f"💳 Consumed 1 credit for user {user_id_obj.value}. Remaining credits: {user.song_credits}")
+            
+            print(f"✅ Creating song from paid order {order_id} for user {user_id_obj.value}. Current credits: {user.song_credits}")
 
             # 2. Create song entity linked to the existing paid order
             style_enum = song_data.music_style if isinstance(song_data.music_style, MusicStyle) else MusicStyle(song_data.music_style)

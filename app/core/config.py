@@ -89,8 +89,8 @@ class Settings(BaseSettings):
     ALLOWED_IMAGE_TYPES: list[str] = Field(default=["image/jpeg", "image/png", "image/webp"])
     
     # Pricing
-    AUDIO_PRICE: int = Field(default=0, env="AUDIO_PRICE")  # $19.00 in cents
-    VIDEO_PRICE: int = Field(default=0, env="VIDEO_PRICE")  # $29.00 in cents
+    AUDIO_PRICE: int = Field(default=1399, env="AUDIO_PRICE")  # $13.99 in cents
+    VIDEO_PRICE: int = Field(default=1999, env="VIDEO_PRICE")  # $19.99 in cents
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, env="RATE_LIMIT_PER_MINUTE")
