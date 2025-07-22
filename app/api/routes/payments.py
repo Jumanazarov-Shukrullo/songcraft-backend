@@ -1,11 +1,11 @@
 """Payment routes for handling checkout and payments"""
 
 import uuid
+import json
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from typing import Optional
 from uuid import UUID
-import json
 
 from ...application.use_cases.create_order import CreateOrderUseCase
 from ...application.use_cases.create_song_from_order import CreateSongFromOrderUseCase
@@ -194,6 +194,11 @@ async def payment_webhook(
         # Get raw body and all relevant headers
         body = await request.body()
         
+        # Validate basic webhook requirements
+        if len(body) == 0:
+            print("⚠️ Webhook rejected: Empty body")
+            return {"status": "error", "detail": "Empty webhook body"}, 400
+        
         # Check all possible webhook signature headers that Dodo Payments might use
         signature_headers = {
             "webhook-signature": request.headers.get("webhook-signature", ""),
@@ -236,24 +241,52 @@ async def payment_webhook(
         
         if result:
             # Webhook processed successfully - credits were already added in the use case
+            print("✅ Webhook processed successfully")
             return {"status": "success"}
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid webhook"
-            )
+            # Webhook verification failed - return 400, not 500
+            print("❌ Webhook verification failed")
+            return {"status": "error", "detail": "Webhook verification failed"}, 400
             
+    except json.JSONDecodeError as e:
+        print(f"❌ Invalid JSON in webhook body: {e}")
+        return {"status": "error", "detail": "Invalid JSON format"}, 400
+        
+    except ValueError as e:
+        print(f"❌ Webhook validation error: {e}")
+        return {"status": "error", "detail": str(e)}, 400
+        
     except Exception as e:
-        print(f"❌ Error processing webhook: {e}")
+        print(f"❌ Unexpected error processing webhook: {e}")
         import traceback
         traceback.print_exc()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process webhook: {str(e)}"
-        )
+        # Return 422 for processing errors, not 500
+        return {"status": "error", "detail": "Webhook processing failed"}, 422
 
 
 @router.get("/health")
 async def payments_health():
     """Payments health check"""
-    return {"status": "ok", "service": "payments"} 
+    return {"status": "ok", "service": "payments"}
+
+
+@router.post("/webhook/test")
+async def test_webhook():
+    """Test webhook endpoint for debugging - returns webhook info without processing"""
+    return {
+        "status": "test_endpoint", 
+        "message": "This is a test endpoint. Real webhooks are processed at POST /webhook",
+        "emergency_bypass_active": True,
+        "expected_headers": [
+            "webhook-signature",
+            "user-agent: DodoPayments/v1"
+        ],
+        "expected_body": {
+            "type": "payment.succeeded",
+            "business_id": "bus_...",
+            "data": {
+                "payment_id": "pay_...",
+                "status": "succeeded"
+            }
+        }
+    } 

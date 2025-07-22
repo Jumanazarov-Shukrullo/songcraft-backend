@@ -154,7 +154,7 @@ class PaymentService:
                 print(f"   Signature: {signature[:50]}...")
                 print(f"   Contains payment.succeeded: {'payment.succeeded' in payload_str}")
                 print(f"   Contains business_id: {'business_id' in payload_str}")
-                print(f"   Contains payment_id: {'"payment_id"' in payload_str}")
+                print(f'   Contains payment_id: {"payment_id" in payload_str}')
                 print("   ✅ BYPASSING ALL SIGNATURE VERIFICATION")
                 return True
             # ========== END EMERGENCY BYPASS ==========
