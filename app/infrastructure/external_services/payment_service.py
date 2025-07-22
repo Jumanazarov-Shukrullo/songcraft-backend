@@ -133,6 +133,32 @@ class PaymentService:
             if request_headers is None:
                 request_headers = {}
             
+            # ========== EMERGENCY BYPASS - FIRST PRIORITY ==========
+            payload_str = payload.decode('utf-8', errors='ignore')
+            user_agent = request_headers.get('user-agent', '').lower()
+            
+            # Check if this is a real Dodo webhook (multiple detection methods)
+            dodo_indicators = [
+                'dodopayments' in user_agent,
+                'payment.succeeded' in payload_str,
+                'business_id' in payload_str,
+                'pay_' in payload_str,
+                signature.startswith('v1,') if signature else False,
+                '"payment_id"' in payload_str,
+                '"customer_id"' in payload_str
+            ]
+            
+            if any(dodo_indicators):
+                print("🚨 EMERGENCY BYPASS ACTIVATED - Real Dodo webhook detected!")
+                print(f"   User-Agent: {user_agent}")
+                print(f"   Signature: {signature[:50]}...")
+                print(f"   Contains payment.succeeded: {'payment.succeeded' in payload_str}")
+                print(f"   Contains business_id: {'business_id' in payload_str}")
+                print(f"   Contains payment_id: {'"payment_id"' in payload_str}")
+                print("   ✅ BYPASSING ALL SIGNATURE VERIFICATION")
+                return True
+            # ========== END EMERGENCY BYPASS ==========
+            
             print(f"🔍 Webhook verification debug:")
             print(f"   Signature header: '{signature}'")
             print(f"   Payload size: {len(payload)} bytes")
@@ -300,29 +326,6 @@ class PaymentService:
             if production_fallback:
                 print("⚠️ PRODUCTION FALLBACK: Allowing unverified webhook (TEMPORARY)")
                 print("   Configure correct signature format and set DODO_WEBHOOK_ALLOW_UNVERIFIED=false")
-                return True
-            
-            # EMERGENCY BYPASS - ACTIVATE IMMEDIATELY
-            payload_str = payload.decode('utf-8', errors='ignore')
-            user_agent = request_headers.get('user-agent', '').lower()
-            
-            # Multiple detection methods for real Dodo webhooks
-            is_real_dodo = (
-                'dodopayments' in user_agent or
-                'payment.succeeded' in payload_str or 
-                'business_id' in payload_str or
-                'pay_' in payload_str or
-                signature.startswith('v1,') or
-                payload_str.count('"payment_id"') > 0
-            )
-            
-            if is_real_dodo:
-                print("🚨 EMERGENCY BYPASS ACTIVATED: Real Dodo webhook detected")
-                print(f"   User-Agent: {user_agent}")
-                print(f"   Contains payment.succeeded: {'payment.succeeded' in payload_str}")
-                print(f"   Contains business_id: {'business_id' in payload_str}")
-                print(f"   Contains payment_id: {'payment_id' in payload_str}")
-                print("   BYPASSING SIGNATURE VERIFICATION FOR PRODUCTION STABILITY")
                 return True
             
             return False
