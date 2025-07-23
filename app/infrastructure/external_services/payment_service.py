@@ -1,378 +1,208 @@
-"""Payment service for processing payments via Dodo Payments SDK"""
+"""Payment service for processing payments via Stripe"""
 
 import os
+import stripe
 from typing import Dict, Optional
 from datetime import datetime, timedelta
 
-from dodopayments import DodoPayments
 from ...core.config import settings
 
 
 class PaymentService:
     
     def __init__(self):
-        self.api_key = settings.DODO_PAYMENTS_API_KEY
-        self.webhook_secret = settings.DODO_PAYMENTS_WEBHOOK_SECRET
-        self.audio_product_id = settings.DODO_AUDIO_PRODUCT_ID
-        self.video_product_id = settings.DODO_VIDEO_PRODUCT_ID
-        
-        # Initialize Dodo Payments client
-        self.client = DodoPayments(
-            bearer_token=self.api_key
-        )
+        # Initialize Stripe
+        stripe.api_key = settings.STRIPE_SECRET_KEY
+        self.webhook_secret = settings.STRIPE_WEBHOOK_SECRET
+        self.audio_product_id = settings.STRIPE_AUDIO_PRODUCT_ID
+        self.video_product_id = settings.STRIPE_VIDEO_PRODUCT_ID
     
     async def create_checkout_session(self, 
                                     customer_email: str,
                                     product_type: str,  # "audio_only" or "audio_video"
                                     custom_data: Dict = None) -> Dict:
-        """Create payment link with Dodo Payments SDK"""
+        """Create Stripe checkout session using pre-configured products"""
         try:
-            print(f"💳 Creating Dodo Payments checkout for {product_type}...")
+            print(f"💳 Creating Stripe checkout session for {product_type}...")
             
             # Determine product ID based on type
             if product_type == "audio_only":
                 product_id = self.audio_product_id
+                product_name = "AI Song Generation - Audio Only"
             elif product_type == "audio_video":
                 product_id = self.video_product_id
+                product_name = "AI Song Generation - Audio + Video"
             else:
                 raise ValueError(f"Invalid product type: {product_type}")
             
-            # Extract customer info - convert Email object to string first
-            email_str = str(customer_email)
-            customer_name = (custom_data or {}).get("customer_name", email_str.split("@")[0])
-            payment_method = (custom_data or {}).get("payment_method", "international")
+            # Extract custom data
+            user_id = (custom_data or {}).get("user_id")
+            order_id = (custom_data or {}).get("order_id")
+            song_data = (custom_data or {}).get("song_data")
             
-            print(f"🔗 Creating payment with product ID: {product_id}")
-            print(f"👤 Customer: {email_str}")
-            print(f"💳 Payment method: {payment_method}")
+            print(f"🔗 Creating checkout session for {product_name}")
+            print(f"👤 Customer: {customer_email}")
+            print(f"🆔 Product ID: {product_id}")
             
-            # Determine billing country based on payment method
-            if payment_method == "mir":
-                billing_country = "RU"  # Russia for MIR cards
-                print("🇷🇺 Using MIR payment method for Russian users")
-            else:
-                billing_country = "US"  # Default to US for international cards
-            
-            # Create payment using Dodo Payments SDK
-            payment_data = {
-                "payment_link": True,
-                "billing": {
-                    "city": "N/A",
-                    "country": billing_country, 
-                    "state": "N/A",
-                    "street": "N/A",
-                    "zipcode": 0
-                },
-                "customer": {
-                    "email": email_str,
-                    "name": customer_name
-                },
-                "product_cart": [{
-                    "product_id": product_id,
-                    "quantity": 1
+            # Create Stripe checkout session using product ID
+            session = stripe.checkout.Session.create(
+                payment_method_types=['card'],
+                line_items=[{
+                    'price': product_id,  # Use the price ID from your Stripe product
+                    'quantity': 1,
                 }],
-                "return_url": f"{settings.FRONTEND_URL}/payment/success"
-            }
-            
-            # Add payment method specific settings if needed
-            if payment_method == "mir":
-                # Add any MIR-specific configuration here
-                payment_data["metadata"] = {
-                    "payment_method": "mir",
-                    "country": "RU"
+                mode='payment',
+                success_url=f"{settings.FRONTEND_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{settings.FRONTEND_URL}/payment/cancel",
+                customer_email=customer_email,
+                metadata={
+                    'user_id': user_id or '',
+                    'order_id': order_id or '',
+                    'product_type': product_type
+                    # Note: song_data removed due to Stripe 500 char limit per metadata value
+                    # Song data can be retrieved using order_id when processing webhook
                 }
-            
-            payment = self.client.payments.create(**payment_data)
-            
-            # Extract payment link and ID from response
-            payment_link = payment.payment_link
-            payment_id = payment.payment_id
-            
-            if not payment_link:
-                raise Exception("No payment_link in SDK response")
+            )
             
             result = {
-                "checkout_id": payment_id,
-                "checkout_url": payment_link,
-                "payment_id": payment_id,
+                "checkout_id": session.id,
+                "checkout_url": session.url,
+                "payment_id": session.id,
                 "expires_at": (datetime.now() + timedelta(hours=24)).isoformat() + "Z",
                 "product_type": product_type,
                 "currency": "USD"
             }
             
-            print(f"✅ Dodo Payments checkout created successfully")
-            print(f"🆔 Payment ID: {payment_id}")
-            print(f"🔗 Payment Link: {payment_link}")
+            print(f"✅ Stripe checkout session created successfully")
+            print(f"🆔 Session ID: {session.id}")
+            print(f"🔗 Checkout URL: {session.url}")
             return result
                     
+        except stripe.error.StripeError as e:
+            print(f"❌ Stripe error creating checkout: {e}")
+            raise Exception(f"Failed to create checkout: {e}")
         except Exception as e:
-            print(f"❌ Error creating Dodo Payments checkout: {e}")
+            print(f"❌ Error creating Stripe checkout: {e}")
             raise Exception(f"Failed to create checkout: {e}")
     
     async def get_checkout_status(self, checkout_id: str) -> Dict:
-        """Get payment status from Dodo Payments"""
+        """Get payment status from Stripe"""
         try:
-            # Use SDK to get payment information if available
-            # Note: Check Dodo Payments SDK docs for payment retrieval method
+            session = stripe.checkout.Session.retrieve(checkout_id)
+            
+            # Map Stripe status to our status
+            if session.payment_status == 'paid':
+                status = 'completed'
+            elif session.payment_status == 'unpaid':
+                status = 'pending'
+            else:
+                status = 'failed'
+            
             return {
                 "payment_id": checkout_id,
-                "status": "pending",  # This would come from SDK
-                "currency": "USD"
+                "status": status,
+                "currency": session.currency.upper() if session.currency else "USD"
             }
                     
+        except stripe.error.StripeError as e:
+            print(f"❌ Stripe error getting checkout status: {e}")
+            return {"status": "error", "error": str(e)}
         except Exception as e:
+            print(f"❌ Error getting checkout status: {e}")
             return {"status": "error", "error": str(e)}
     
     def verify_webhook(self, payload: bytes, signature: str, request_headers: dict = None) -> bool:
-        """Verify webhook signature from Dodo Payments using Standard Webhooks spec"""
+        """Verify webhook signature from Stripe"""
         try:
-            import hmac
-            import hashlib
-            import time
+            print(f"🔍 Verifying Stripe webhook signature...")
             
-            if request_headers is None:
-                request_headers = {}
-            
-            # ========== EMERGENCY BYPASS - FIRST PRIORITY ==========
-            payload_str = payload.decode('utf-8', errors='ignore')
-            user_agent = request_headers.get('user-agent', '').lower()
-            
-            # Check if this is a real Dodo webhook (multiple detection methods)
-            dodo_indicators = [
-                'dodopayments' in user_agent,
-                'payment.succeeded' in payload_str,
-                'business_id' in payload_str,
-                'pay_' in payload_str,
-                signature.startswith('v1,') if signature else False,
-                '"payment_id"' in payload_str,
-                '"customer_id"' in payload_str
-            ]
-            
-            if any(dodo_indicators):
-                print("🚨 EMERGENCY BYPASS ACTIVATED - Real Dodo webhook detected!")
-                print(f"   User-Agent: {user_agent}")
-                print(f"   Signature: {signature[:50]}...")
-                print(f"   Contains payment.succeeded: {'payment.succeeded' in payload_str}")
-                print(f"   Contains business_id: {'business_id' in payload_str}")
-                print(f'   Contains payment_id: {"payment_id" in payload_str}')
-                print("   ✅ BYPASSING ALL SIGNATURE VERIFICATION")
-                return True
-            # ========== END EMERGENCY BYPASS ==========
-            
-            print(f"🔍 Webhook verification debug:")
-            print(f"   Signature header: '{signature}'")
-            print(f"   Payload size: {len(payload)} bytes")
-            print(f"   Webhook secret configured: {'Yes' if self.webhook_secret else 'No'}")
-            print(f"   User-Agent: {request_headers.get('user-agent', 'unknown')}")
-            
-            # If no webhook secret configured, log and reject
             if not self.webhook_secret:
                 print("❌ No webhook secret configured")
                 return False
             
-            # If no signature provided, check if this is a test/development scenario
             if not signature:
-                print("⚠️ No signature header provided")
-                debug_mode = os.getenv("DODO_WEBHOOK_DEBUG", "false").lower() == "true"
-                if debug_mode:
-                    print("⚠️ DEBUG MODE: No signature but allowing webhook processing")
-                    return True
+                print("❌ No signature header provided")
                 return False
             
-            # Try different signature formats that Dodo Payments might use
+            # Verify the webhook signature using Stripe's library
+            stripe.Webhook.construct_event(
+                payload, signature, self.webhook_secret
+            )
             
-            # Format 1: Standard Webhooks (v1,signature1,signature2...)
-            if signature.startswith("v1,"):
-                print("🔍 Trying Standard Webhooks format (v1,sig)")
-                signatures = signature[3:].split(",")
-                
-                # Try different payload combinations for timestamp-based signatures
-                import json
-                try:
-                    payload_json = json.loads(payload.decode())
-                    timestamp = payload_json.get("timestamp", "")
-                    
-                    # Test payloads to try
-                    test_payloads = [
-                        payload,  # Original payload
-                        f"{timestamp}.{payload.decode()}".encode(),  # timestamp.payload
-                        f"{payload.decode()}.{timestamp}".encode(),  # payload.timestamp
-                        (payload.decode() + timestamp).encode(),     # payload+timestamp
-                    ]
-                    
-                    if timestamp:
-                        print(f"   Found timestamp in payload: {timestamp}")
-                        test_payloads.extend([
-                            f"{timestamp}.{payload.decode()}".encode(),
-                            payload.decode().replace('"timestamp":"' + timestamp + '"', '').encode()  # payload without timestamp
-                        ])
-                    
-                except:
-                    test_payloads = [payload]  # Fallback to original payload
-                
-                for test_payload in test_payloads:
-                    expected_signature = hmac.new(
-                        self.webhook_secret.encode(),
-                        test_payload,
-                        hashlib.sha256
-                    ).digest()  # Get raw bytes, not hex
-                    
-                    # Convert to base64 for comparison (Standard Webhooks uses base64)
-                    import base64
-                    expected_b64 = base64.b64encode(expected_signature).decode()
-                    
-                    # Also try hex comparison
-                    expected_hex = expected_signature.hex()
-                    
-                    print(f"   Testing payload size: {len(test_payload)} bytes")
-                    print(f"   Expected (base64): {expected_b64}")
-                    print(f"   Expected (hex): {expected_hex}")
-                    
-                    # Check against base64 signatures
-                    for sig in signatures:
-                        if hmac.compare_digest(sig, expected_b64):
-                            print(f"   ✅ MATCH FOUND (base64)!")
-                            return True
-                        # Also try hex comparison
-                        if hmac.compare_digest(sig, expected_hex):
-                            print(f"   ✅ MATCH FOUND (hex)!")
-                            return True
-                        
-                        # Try decoding the received signature if it's base64
-                        try:
-                            decoded_sig = base64.b64decode(sig).hex()
-                            if hmac.compare_digest(decoded_sig, expected_hex):
-                                print(f"   ✅ MATCH FOUND (decoded base64 to hex)!")
-                                return True
-                        except:
-                            pass
-                
-                print(f"   Received: {signatures}")
-                print(f"   No matches found in Standard Webhooks format")
+            print("✅ Stripe webhook signature verified successfully")
+            return True
             
-            # Format 2: Simple SHA256 hex
-            else:
-                print("🔍 Trying simple SHA256 hex format")
-                expected_signature = hmac.new(
-                    self.webhook_secret.encode(),
-                    payload,
-                    hashlib.sha256
-                ).hexdigest()
-                
-                match_found = hmac.compare_digest(signature, expected_signature)
-                print(f"   Expected: {expected_signature}")
-                print(f"   Received: {signature}")
-                print(f"   Match: {match_found}")
-                
-                if match_found:
-                    return True
-            
-            # Format 3: SHA256 with prefix (sha256=...)
-            if signature.startswith("sha256="):
-                print("🔍 Trying SHA256 prefix format (sha256=sig)")
-                sig_without_prefix = signature[7:]  # Remove "sha256=" prefix
-                expected_signature = hmac.new(
-                    self.webhook_secret.encode(),
-                    payload,
-                    hashlib.sha256
-                ).hexdigest()
-                
-                match_found = hmac.compare_digest(sig_without_prefix, expected_signature)
-                print(f"   Expected: {expected_signature}")
-                print(f"   Received (without prefix): {sig_without_prefix}")
-                print(f"   Match: {match_found}")
-                
-                if match_found:
-                    return True
-            
-            # Format 4: Try with timestamp-based signatures (common pattern)
-            print("🔍 Trying timestamp-based signature formats")
-            current_time = int(time.time())
-            
-            # Try current timestamp and ±5 minutes for clock skew
-            for time_offset in range(-300, 301, 60):  # -5min to +5min in 1min increments
-                test_timestamp = current_time + time_offset
-                
-                # Try different timestamp payload combinations
-                timestamp_payloads = [
-                    f"{test_timestamp}.{payload.decode('utf-8', errors='ignore')}",
-                    f"{payload.decode('utf-8', errors='ignore')}.{test_timestamp}",
-                    payload.decode('utf-8', errors='ignore') + str(test_timestamp),
-                ]
-                
-                for timestamp_payload in timestamp_payloads:
-                    expected_sig = hmac.new(
-                        self.webhook_secret.encode(),
-                        timestamp_payload.encode(),
-                        hashlib.sha256
-                    ).hexdigest()
-                    
-                    if hmac.compare_digest(signature, expected_sig):
-                        print(f"   ✅ Match found with timestamp {test_timestamp}")
-                        return True
-            
-            print("❌ All signature verification methods failed")
-            
-            # DEBUG MODE: Allow webhook processing in development if configured
-            debug_mode = os.getenv("DODO_WEBHOOK_DEBUG", "false").lower() == "true"
-            if debug_mode:
-                print("⚠️ DEBUG MODE: Signature verification failed but allowing webhook processing")
-                print("   Set DODO_WEBHOOK_DEBUG=false in production!")
-                return True
-            
-            # PRODUCTION FALLBACK: For now, allow webhooks if signature is present but verification fails
-            # This is temporary until we get the exact signature format from Dodo Payments
-            production_fallback = os.getenv("DODO_WEBHOOK_ALLOW_UNVERIFIED", "false").lower() == "true"
-            if production_fallback:
-                print("⚠️ PRODUCTION FALLBACK: Allowing unverified webhook (TEMPORARY)")
-                print("   Configure correct signature format and set DODO_WEBHOOK_ALLOW_UNVERIFIED=false")
-                return True
-            
+        except stripe.error.SignatureVerificationError as e:
+            print(f"❌ Stripe webhook signature verification failed: {e}")
             return False
-            
         except Exception as e:
-            print(f"❌ Dodo webhook verification error: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"❌ Stripe webhook verification error: {e}")
             return False
     
     async def process_webhook(self, webhook_data: Dict) -> Dict:
-        """Process webhook from Dodo Payments"""
+        """Process webhook from Stripe"""
         try:
             event_type = webhook_data.get("type")
-            payment_data = webhook_data.get("data", {})
+            payment_data = webhook_data.get("data", {}).get("object", {})
             
-            print(f"📨 Processing Dodo webhook: {event_type}")
+            print(f"📨 Processing Stripe webhook: {event_type}")
             
-            if event_type == "payment.succeeded":
+            if event_type == "checkout.session.completed":
+                return await self._handle_checkout_completed(payment_data)
+            elif event_type == "payment_intent.succeeded":
                 return await self._handle_payment_succeeded(payment_data)
-            elif event_type == "payment.failed":
+            elif event_type == "payment_intent.payment_failed":
                 return await self._handle_payment_failed(payment_data)
-            elif event_type == "payment.refunded":
-                return await self._handle_payment_refunded(payment_data)
+            elif event_type == "charge.dispute.created":
+                return await self._handle_payment_disputed(payment_data)
             else:
-                print(f"⚠️ Unhandled Dodo webhook event: {event_type}")
+                print(f"⚠️ Unhandled Stripe webhook event: {event_type}")
                 return {"status": "ignored", "event": event_type}
                 
         except Exception as e:
-            print(f"❌ Error processing Dodo webhook: {e}")
+            print(f"❌ Error processing Stripe webhook: {e}")
+            return {"status": "error", "error": str(e)}
+    
+    async def _handle_checkout_completed(self, session_data: Dict) -> Dict:
+        """Handle completed checkout session"""
+        try:
+            session_id = session_data.get("id")
+            customer_email = session_data.get("customer_details", {}).get("email") or session_data.get("customer_email")
+            amount_total = session_data.get("amount_total", 0)
+            metadata = session_data.get("metadata", {})
+            
+            print(f"✅ Checkout session completed: {session_id}")
+            print(f"💰 Amount: ${amount_total/100:.2f}")
+            print(f"👤 Customer: {customer_email}")
+            print(f"📝 Metadata: {metadata}")
+            
+            return {
+                "status": "success",
+                "payment_id": session_id,
+                "amount": amount_total,
+                "customer_email": customer_email,
+                "metadata": metadata
+            }
+            
+        except Exception as e:
+            print(f"❌ Error handling checkout completion: {e}")
             return {"status": "error", "error": str(e)}
     
     async def _handle_payment_succeeded(self, payment_data: Dict) -> Dict:
-        """Handle successful payment"""
+        """Handle successful payment intent"""
         try:
-            payment_id = payment_data.get("payment_id")
-            customer_email = payment_data.get("customer_email")
-            total_amount = payment_data.get("total_amount", 0)
+            payment_id = payment_data.get("id")
+            customer_email = payment_data.get("receipt_email")
+            amount = payment_data.get("amount", 0)
             
-            print(f"✅ Payment succeeded: {payment_id}")
-            print(f"💰 Amount: ${total_amount}")
+            print(f"✅ Payment intent succeeded: {payment_id}")
+            print(f"💰 Amount: ${amount/100:.2f}")
             print(f"👤 Customer: {customer_email}")
             
             return {
                 "status": "success",
                 "payment_id": payment_id,
-                "amount": total_amount,
+                "amount": amount,
                 "customer_email": customer_email
             }
             
@@ -383,8 +213,8 @@ class PaymentService:
     async def _handle_payment_failed(self, payment_data: Dict) -> Dict:
         """Handle failed payment"""
         try:
-            payment_id = payment_data.get("payment_id")
-            error_message = payment_data.get("error_message", "Unknown error")
+            payment_id = payment_data.get("id")
+            error_message = payment_data.get("last_payment_error", {}).get("message", "Unknown error")
             
             print(f"❌ Payment failed: {payment_id}")
             print(f"💭 Reason: {error_message}")
@@ -399,41 +229,71 @@ class PaymentService:
             print(f"❌ Error handling payment failure: {e}")
             return {"status": "error", "error": str(e)}
     
-    async def _handle_payment_refunded(self, payment_data: Dict) -> Dict:
-        """Handle refunded payment"""
+    async def _handle_payment_disputed(self, dispute_data: Dict) -> Dict:
+        """Handle payment dispute/chargeback"""
         try:
-            payment_id = payment_data.get("payment_id")
-            refund_amount = payment_data.get("refund_amount", 0)
+            dispute_id = dispute_data.get("id")
+            charge_id = dispute_data.get("charge")
+            amount = dispute_data.get("amount", 0)
+            reason = dispute_data.get("reason", "Unknown")
             
-            print(f"🔄 Payment refunded: {payment_id}")
-            print(f"💰 Refund amount: ${refund_amount}")
+            print(f"🔄 Payment disputed: {dispute_id}")
+            print(f"💰 Dispute amount: ${amount/100:.2f}")
+            print(f"💭 Reason: {reason}")
             
             return {
-                "status": "refunded",
-                "payment_id": payment_id,
-                "refund_amount": refund_amount
+                "status": "disputed",
+                "dispute_id": dispute_id,
+                "charge_id": charge_id,
+                "amount": amount,
+                "reason": reason
             }
             
         except Exception as e:
-            print(f"❌ Error handling payment refund: {e}")
+            print(f"❌ Error handling payment dispute: {e}")
             return {"status": "error", "error": str(e)}
     
     async def create_customer(self, email: str, name: str = None) -> Dict:
-        """Create customer (if supported by SDK)"""
-        return {
-            "customer_id": email,  # Placeholder - check SDK docs
-            "email": email,
-            "name": name or email.split("@")[0]
-        }
+        """Create Stripe customer"""
+        try:
+            customer = stripe.Customer.create(
+                email=email,
+                name=name or email.split("@")[0]
+            )
+            
+            return {
+                "customer_id": customer.id,
+                "email": customer.email,
+                "name": customer.name
+            }
+        except stripe.error.StripeError as e:
+            print(f"❌ Error creating Stripe customer: {e}")
+            raise Exception(f"Failed to create customer: {e}")
     
     async def get_payment(self, payment_id: str) -> Optional[Dict]:
-        """Get payment details (if supported by SDK)"""
+        """Get payment details from Stripe"""
         try:
-            # Check Dodo Payments SDK for payment retrieval method
-            return {
-                "payment_id": payment_id,
-                "status": "unknown"  # This would come from SDK
-            }
+            # Try to get as checkout session first, then as payment intent
+            try:
+                session = stripe.checkout.Session.retrieve(payment_id)
+                return {
+                    "payment_id": payment_id,
+                    "status": session.payment_status,
+                    "amount": session.amount_total,
+                    "currency": session.currency
+                }
+            except:
+                # Try as payment intent
+                payment_intent = stripe.PaymentIntent.retrieve(payment_id)
+                return {
+                    "payment_id": payment_id,
+                    "status": payment_intent.status,
+                    "amount": payment_intent.amount,
+                    "currency": payment_intent.currency
+                }
+        except stripe.error.StripeError as e:
+            print(f"❌ Error getting Stripe payment: {e}")
+            return None
         except Exception as e:
             print(f"❌ Error getting payment: {e}")
             return None

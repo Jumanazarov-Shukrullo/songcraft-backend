@@ -142,9 +142,9 @@ async def create_checkout(
                 song_id=song_id
             )
         
-        # Handle paid orders using Dodo Payments
+        # Handle paid orders using Stripe
         else:
-            print(f"💳 Paid order detected for {request.product_type}, creating Dodo Payments checkout")
+            print(f"💳 Paid order detected for {request.product_type}, creating Stripe checkout")
             
             # Create order first
             order_data = OrderCreateDTO(
@@ -156,7 +156,7 @@ async def create_checkout(
             create_order_use_case = CreateOrderUseCase(unit_of_work, payment_service)
             order = await create_order_use_case.execute(order_data, current_user.id)
             
-            # Create Dodo Payments checkout session
+            # Create Stripe checkout session
             checkout_result = await payment_service.create_checkout_session(
                 customer_email=str(current_user.email),
                 product_type=request.product_type,

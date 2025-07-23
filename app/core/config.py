@@ -39,22 +39,15 @@ class Settings(BaseSettings):
     MUREKA_API_KEY: str = Field(default="", env="MUREKA_API_KEY")
     MUREKA_API_URL: str = Field(default="https://api.mureka.ai", env="MUREKA_API_URL")
     
-    # Dodo Payments Configuration
-    DODO_PAYMENTS_API_KEY: str = Field(..., env="DODO_PAYMENTS_API_KEY")
-    DODO_PAYMENTS_WEBHOOK_SECRET: str = Field(..., env="DODO_PAYMENTS_WEBHOOK_SECRET")
+    # Stripe Payments Configuration
+    STRIPE_SECRET_KEY: str = Field(..., env="STRIPE_SECRET_KEY")
+    STRIPE_PUBLISHABLE_KEY: str = Field(..., env="STRIPE_PUBLISHABLE_KEY")
+    STRIPE_WEBHOOK_SECRET: str = Field(..., env="STRIPE_WEBHOOK_SECRET")
     
-    # Product IDs from Dodo Payments dashboard
-    DODO_AUDIO_PRODUCT_ID: str = Field(..., env="DODO_AUDIO_PRODUCT_ID")
-    DODO_VIDEO_PRODUCT_ID: str = Field(..., env="DODO_VIDEO_PRODUCT_ID")
+    # Stripe Product IDs (created in Stripe Dashboard)
+    STRIPE_AUDIO_PRODUCT_ID: str = Field(..., env="STRIPE_AUDIO_PRODUCT_ID")
+    STRIPE_VIDEO_PRODUCT_ID: str = Field(..., env="STRIPE_VIDEO_PRODUCT_ID")
 
-    # Legacy LemonSqueezy (commented out - can be removed after full migration)
-    # LEMONSQUEEZY_API_KEY: str = Field(..., env="LEMONSQUEEZY_API_KEY")
-    # LEMONSQUEEZY_STORE_ID: str = Field(..., env="LEMONSQUEEZY_STORE_ID")
-    # LEMONSQUEEZY_WEBHOOK_SECRET: str = Field(..., env="LEMONSQUEEZY_WEBHOOK_SECRET")
-    # LEMONSQUEEZY_API_URL: str = Field(default="https://api.lemonsqueezy.com/v1", env="LEMONSQUEEZY_API_URL")
-    # LEMONSQUEEZY_PRODUCT_ID_AUDIO: str = Field(..., env="LEMONSQUEEZY_PRODUCT_ID_AUDIO")
-    # LEMONSQUEEZY_PRODUCT_ID_VIDEO: str = Field(..., env="LEMONSQUEEZY_PRODUCT_ID_VIDEO")
-    
     # Email SMTP Configuration
     SMTP_HOST: str = Field(..., env="SMTP_HOST")
     SMTP_PORT: int = Field(default=587, env="SMTP_PORT")
@@ -108,4 +101,5 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
+# Create global instance
 settings = Settings() 

@@ -15,7 +15,7 @@ class ProcessPaymentWebhookUseCase:
         self.payment_service = payment_service
     
     async def execute(self, payload: bytes, signature: str, request_headers: dict = None) -> bool:
-        """Process payment webhook from payment provider"""
+        """Process payment webhook from Stripe"""
         # Verify webhook signature (sync method, don't await)
         is_valid = self.payment_service.verify_webhook(payload, signature, request_headers or {})
         if not is_valid:
@@ -27,14 +27,36 @@ class ProcessPaymentWebhookUseCase:
             data = json.loads(payload.decode())
             print(f"📨 Received webhook data: {json.dumps(data, indent=2)}")
             
-            # Extract order information from Dodo Payments webhook
-            payment_data = data.get("data", {})
-            custom_data = payment_data.get("custom_data", {})
-            user_id = custom_data.get("user_id")
-            order_id = custom_data.get("order_id")
-            payment_id = payment_data.get("id")
+            event_type = data.get("type")
+            
+            # Only process checkout session completed events for payments
+            if event_type == "checkout.session.completed":
+                return await self._handle_checkout_completed(data)
+            else:
+                print(f"⚠️ Ignoring webhook event: {event_type}")
+                return True  # Return True to acknowledge receipt but ignore the event
+            
+        except Exception as e:
+            print(f"❌ Error processing webhook: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    async def _handle_checkout_completed(self, data: dict) -> bool:
+        """Handle Stripe checkout.session.completed event"""
+        try:
+            # Extract order information from Stripe checkout session
+            session_data = data.get("data", {}).get("object", {})
+            metadata = session_data.get("metadata", {})
+            
+            user_id = metadata.get("user_id")
+            order_id = metadata.get("order_id")
+            payment_id = session_data.get("id")  # Stripe session ID
+            customer_email = session_data.get("customer_details", {}).get("email") or session_data.get("customer_email")
+            amount_total = session_data.get("amount_total", 0)
             
             print(f"📋 Extracted: user_id={user_id}, order_id={order_id}, payment_id={payment_id}")
+            print(f"💰 Amount: ${amount_total/100:.2f}, Customer: {customer_email}")
             
             if not user_id or not order_id or not payment_id:
                 print(f"❌ Missing required data in webhook: user_id={user_id}, order_id={order_id}, payment_id={payment_id}")
@@ -80,7 +102,7 @@ class ProcessPaymentWebhookUseCase:
                 print(f"✅ Order {order_id} marked as paid with payment_id: {payment_id}")
                 return True
         except Exception as e:
-            print(f"❌ Error processing webhook: {e}")
+            print(f"❌ Error processing checkout completion: {e}")
             import traceback
             traceback.print_exc()
             return False 
