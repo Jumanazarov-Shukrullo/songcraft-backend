@@ -32,17 +32,17 @@ class OrderRepositoryImpl(IOrderRepository):
         self.session.flush()
         return order
 
-    async def get_by_id(self, order_id: OrderId) -> Optional[Order]:
+    def get_by_id(self, order_id: OrderId) -> Optional[Order]:
         """Get order by ID"""
         model = self.session.query(OrderModel).filter(OrderModel.id == order_id.value).first()
         return self._map_to_entity(model) if model else None
 
-    async def get_by_user_id(self, user_id: UserId) -> List[Order]:
+    def get_by_user_id(self, user_id: UserId) -> List[Order]:
         """Get orders by user ID"""
         models = self.session.query(OrderModel).filter(OrderModel.user_id == user_id.value).all()
         return [self._map_to_entity(model) for model in models]
 
-    async def add(self, order: Order) -> Order:
+    def add(self, order: Order) -> Order:
         """Add a new order"""
         # Create model without ID for new orders
         # Handle product_type - it might be an enum or already a string
@@ -86,7 +86,7 @@ class OrderRepositoryImpl(IOrderRepository):
         
         return order_with_id
 
-    async def update(self, order: Order) -> Order:
+    def update(self, order: Order) -> Order:
         """Update an existing order"""
         existing = self.session.query(OrderModel).filter(OrderModel.id == order.id.value).first()
         if existing:
@@ -94,7 +94,7 @@ class OrderRepositoryImpl(IOrderRepository):
             self.session.flush()
         return order
 
-    async def get_by_payment_provider_id(self, provider_id: str) -> Optional[Order]:
+    def get_by_payment_provider_id(self, provider_id: str) -> Optional[Order]:
         """Get order by payment provider ID"""
         model = self.session.query(OrderModel).filter(OrderModel.payment_provider_id == provider_id).first()
         return self._map_to_entity(model) if model else None

@@ -189,7 +189,7 @@ async def payment_webhook(
     payment_service = Depends(get_payment_service),
     ai_service = Depends(get_ai_service)
 ):
-    """Handle payment webhooks from Dodo Payments"""
+    """Handle payment webhooks from Stripe"""
     try:
         # Get raw body and all relevant headers
         body = await request.body()
@@ -199,8 +199,9 @@ async def payment_webhook(
             print("⚠️ Webhook rejected: Empty body")
             return {"status": "error", "detail": "Empty webhook body"}, 400
         
-        # Check all possible webhook signature headers that Dodo Payments might use
+        # Check all possible webhook signature headers for Stripe and legacy providers
         signature_headers = {
+            "stripe-signature": request.headers.get("stripe-signature", ""),
             "webhook-signature": request.headers.get("webhook-signature", ""),
             "x-webhook-signature": request.headers.get("x-webhook-signature", ""),
             "dodo-signature": request.headers.get("dodo-signature", ""),

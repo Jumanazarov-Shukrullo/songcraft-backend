@@ -32,9 +32,13 @@ class UnitOfWorkImpl(IUnitOfWork):
             self.session.commit()
             self._committed = True
         except Exception as e:
-            await self.rollback()
+            self.rollback_sync()
             raise e
 
     async def rollback(self) -> None:
         """Rollback transaction"""
+        self.rollback_sync()
+        
+    def rollback_sync(self) -> None:
+        """Synchronous rollback helper"""
         self.session.rollback()

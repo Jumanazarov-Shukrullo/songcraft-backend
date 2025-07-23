@@ -34,17 +34,17 @@ class UserRepositoryImpl(IUserRepository):
         self.session.flush()
         return user
 
-    async def get_by_id(self, user_id: UserId) -> Optional[User]:
+    def get_by_id(self, user_id: UserId) -> Optional[User]:
         """Get user by ID"""
         model = self.session.query(UserModel).filter(UserModel.id == user_id.value).first()
         return self._map_to_entity(model) if model else None
 
-    async def get_by_email(self, email: Email) -> Optional[User]:
+    def get_by_email(self, email: Email) -> Optional[User]:
         """Get user by email"""
         model = self.session.query(UserModel).filter(UserModel.email == str(email)).first()
         return self._map_to_entity(model) if model else None
 
-    async def get_by_reset_token(self, token: str) -> Optional[User]:
+    def get_by_reset_token(self, token: str) -> Optional[User]:
         """Get user by password reset token - Production ready method"""
         model = self.session.query(UserModel).filter(
             UserModel.password_reset_token == token,
@@ -53,18 +53,18 @@ class UserRepositoryImpl(IUserRepository):
         ).first()
         return self._map_to_entity(model) if model else None
 
-    async def get_by_verification_token(self, token: str) -> Optional[User]:
+    def get_by_verification_token(self, token: str) -> Optional[User]:
         """Get user by email verification token"""
         model = self.session.query(UserModel).filter(
             UserModel.email_verification_token == token
         ).first()
         return self._map_to_entity(model) if model else None
 
-    async def exists_by_email(self, email: Email) -> bool:
+    def exists_by_email(self, email: Email) -> bool:
         """Check if user exists by email"""
         return self.session.query(UserModel).filter(UserModel.email == str(email)).first() is not None
 
-    async def add(self, user: User) -> User:
+    def add(self, user: User) -> User:
         """Add a new user"""
         # Create model without ID for new users
         model_data = {
@@ -111,7 +111,7 @@ class UserRepositoryImpl(IUserRepository):
         
         return user_with_id
 
-    async def update(self, user: User) -> User:
+    def update(self, user: User) -> User:
         """Update an existing user"""
         existing = self.session.query(UserModel).filter(UserModel.id == user.id.value).first()
         if existing:
@@ -119,17 +119,17 @@ class UserRepositoryImpl(IUserRepository):
             self.session.flush()
         return user
 
-    async def count(self) -> int:
+    def count(self) -> int:
         """Count total users"""
         return self.session.query(UserModel).count()
 
-    async def get_paginated(self, page: int, limit: int) -> List[User]:
+    def get_paginated(self, page: int, limit: int) -> List[User]:
         """Get paginated users"""
         offset = (page - 1) * limit
         models = self.session.query(UserModel).offset(offset).limit(limit).all()
         return [self._map_to_entity(model) for model in models]
 
-    async def delete(self, user_id: UserId) -> None:
+    def delete(self, user_id: UserId) -> None:
         """Delete user"""
         user = self.session.query(UserModel).filter(UserModel.id == user_id.value).first()
         if user:
