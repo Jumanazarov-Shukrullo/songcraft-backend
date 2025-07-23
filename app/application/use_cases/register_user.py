@@ -20,7 +20,7 @@ class RegisterUserUseCase:
             email = Email(request.email)
             
             # Check if user exists
-            if await self.unit_of_work.users.exists_by_email(email):
+            if self.unit_of_work.users.exists_by_email(email):
                 raise ValueError("User with this email already exists")
             
             # Create user entity

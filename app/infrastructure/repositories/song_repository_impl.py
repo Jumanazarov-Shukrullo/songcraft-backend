@@ -32,22 +32,22 @@ class SongRepositoryImpl(ISongRepository):
         self.session.flush()
         return song
 
-    def get_by_id(self, song_id: SongId) -> Optional[Song]:
+    async def get_by_id(self, song_id: SongId) -> Optional[Song]:
         """Get song by ID"""
         model = self.session.query(SongModel).filter(SongModel.id == song_id.value).first()
         return self._map_to_entity(model) if model else None
 
-    def get_by_user_id(self, user_id: UserId) -> List[Song]:
+    async def get_by_user_id(self, user_id: UserId) -> List[Song]:
         """Get songs by user ID"""
         models = self.session.query(SongModel).filter(SongModel.user_id == user_id.value).all()
         return [self._map_to_entity(model) for model in models]
 
-    def get_by_order_id(self, order_id: OrderId) -> Optional[Song]:
+    async def get_by_order_id(self, order_id: OrderId) -> Optional[Song]:
         """Get song by order ID"""
         model = self.session.query(SongModel).filter(SongModel.order_id == order_id.value).first()
         return self._map_to_entity(model) if model else None
 
-    def add(self, song: Song) -> Song:
+    async def add(self, song: Song) -> Song:
         """Add a new song"""
         # Create model without ID for new songs
         model_data = {
@@ -82,7 +82,7 @@ class SongRepositoryImpl(ISongRepository):
         song.id = SongId(model.id)
         return song
 
-    def update(self, song: Song) -> Song:
+    async def update(self, song: Song) -> Song:
         """Update an existing song"""
         existing = self.session.query(SongModel).filter(SongModel.id == song.id.value).first()
         if existing:
@@ -90,13 +90,13 @@ class SongRepositoryImpl(ISongRepository):
             self.session.flush()
         return song
 
-    def delete(self, song_id: SongId) -> None:
+    async def delete(self, song_id: SongId) -> None:
         """Delete song"""
         song = self.session.query(SongModel).filter(SongModel.id == song_id.value).first()
         if song:
             self.session.delete(song)
 
-    def count(self) -> int:
+    async def count(self) -> int:
         """Count total songs"""
         return self.session.query(SongModel).count()
 

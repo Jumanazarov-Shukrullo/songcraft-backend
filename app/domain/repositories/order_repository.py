@@ -10,23 +10,23 @@ from ..value_objects.entity_ids import OrderId, UserId
 class IOrderRepository(ABC):
     
     @abstractmethod
-    def get_by_id(self, order_id: OrderId) -> Optional[Order]:
+    async def get_by_id(self, order_id: OrderId) -> Optional[Order]:
         pass
     
     @abstractmethod
-    def get_by_user_id(self, user_id: UserId) -> List[Order]:
+    async def get_by_user_id(self, user_id: UserId) -> List[Order]:
         pass
     
     @abstractmethod
-    def add(self, order: Order) -> Order:
+    async def add(self, order: Order) -> Order:
         pass
     
     @abstractmethod
-    def update(self, order: Order) -> Order:
+    async def update(self, order: Order) -> Order:
         pass
     
     @abstractmethod
-    def get_by_payment_provider_id(self, provider_id: str) -> Optional[Order]:
+    async def get_by_payment_provider_id(self, provider_id: str) -> Optional[Order]:
         pass
     
     @abstractmethod

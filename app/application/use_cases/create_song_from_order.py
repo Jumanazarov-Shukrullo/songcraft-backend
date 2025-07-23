@@ -24,7 +24,7 @@ class CreateSongFromOrderUseCase:
         async with self.unit_of_work:
             # 1. Verify the order exists and is paid
             order_repo = self.unit_of_work.orders
-            existing_order = order_repo.get_by_id(OrderId.from_str(order_id))
+            existing_order = await order_repo.get_by_id(OrderId.from_str(order_id))
             
             if not existing_order:
                 raise ValueError(f"Order {order_id} not found")
@@ -40,7 +40,7 @@ class CreateSongFromOrderUseCase:
             # For paid orders, the payment already grants the right to create songs
             # No need to check or consume credits since this is from a paid order
             user_repo = self.unit_of_work.users
-            user = user_repo.get_by_id(user_id_obj)
+            user = await user_repo.get_by_id(user_id_obj)
             if not user:
                 raise ValueError("User not found")
             
@@ -110,7 +110,7 @@ class CreateSongFromOrderUseCase:
 
             # Save song to repository (ID will be set)
             song_repo = self.unit_of_work.songs
-            saved_song = song_repo.add(song)
+            saved_song = await song_repo.add(song)
 
             # Commit DB so song ID is generated before calling external services
             await self.unit_of_work.commit()
@@ -119,7 +119,7 @@ class CreateSongFromOrderUseCase:
             if saved_song.lyrics:
                 # Start audio generation process
                 saved_song.start_audio_generation()
-                song_repo.update(saved_song)
+                await song_repo.update(saved_song)
                 await self.unit_of_work.commit()
                 
                 # Notify that audio generation started
@@ -148,7 +148,7 @@ class CreateSongFromOrderUseCase:
                         saved_song.video_url = AudioUrl(audio_result['video_url'])  # Reuse AudioUrl for now
                         saved_song.video_status = GenerationStatus.COMPLETED
                     
-                    song_repo.update(saved_song)
+                    await song_repo.update(saved_song)
                     await self.unit_of_work.commit()
                     
                     print(f"✅ Song {saved_song.id.value} completed immediately with audio URL: {audio_result['audio_url']}")
@@ -185,7 +185,7 @@ class CreateSongFromOrderUseCase:
                     # Genuine failure
                     saved_song.audio_status = GenerationStatus.FAILED
                     saved_song.video_status = GenerationStatus.FAILED  # cascade fail
-                    song_repo.update(saved_song)
+                    await song_repo.update(saved_song)
                     await self.unit_of_work.commit()
                     await broadcaster.notify(saved_song.id.value, {
                         "audio_status": saved_song.audio_status.value,
@@ -250,7 +250,7 @@ class CreateSongFromOrderUseCase:
             async with self.unit_of_work:
                 song_repo = self.unit_of_work.songs
                 
-                song = song_repo.get_by_id(SongId(song_id))  # song_id is already UUID
+                song = await song_repo.get_by_id(SongId(song_id))  # song_id is already UUID
                 if not song:
                     print(f"❌ Song {song_id} not found for completion update")
                     return
@@ -266,7 +266,7 @@ class CreateSongFromOrderUseCase:
                     song.video_url = AudioUrl(status_result["video_url"])
                     song.video_status = GenerationStatus.COMPLETED
                 
-                song_repo.update(song)
+                await song_repo.update(song)
                 await self.unit_of_work.commit()
                 
                 print(f"✅ Song {song_id} updated with completed generation")
@@ -307,7 +307,7 @@ class CreateSongFromOrderUseCase:
                 # Update the song in database
                 async with self.unit_of_work:
                     song_repo = self.unit_of_work.songs
-                    song = song_repo.get_by_id(SongId(song_id))  # song_id is already UUID
+                    song = await song_repo.get_by_id(SongId(song_id))  # song_id is already UUID
                     
                     if not song:
                         print(f"❌ Song {song_id} not found for update")
@@ -330,7 +330,7 @@ class CreateSongFromOrderUseCase:
                             song.video_status = GenerationStatus.COMPLETED
                             print(f"🎬 Video URL: {final_result.get('video_url')}")
                         
-                        song_repo.update(song)
+                        await song_repo.update(song)
                         await self.unit_of_work.commit()
                         
                         print(f"💾 Song {song_id} successfully updated in database")
@@ -354,7 +354,7 @@ class CreateSongFromOrderUseCase:
                         # Mark as failed
                         song.audio_status = GenerationStatus.FAILED
                         song.video_status = GenerationStatus.FAILED
-                        song_repo.update(song)
+                        await song_repo.update(song)
                         await self.unit_of_work.commit()
                         
                         await broadcaster.notify(song_id, {
