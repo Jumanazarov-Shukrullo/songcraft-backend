@@ -133,10 +133,19 @@ async def create_song_from_order(
     ai_service = Depends(get_ai_service)
 ):
     """Create a song from an existing paid order"""
+    print(f"🔍 RAW REQUEST RECEIVED:")
+    print(f"   Type: {type(request)}")
+    print(f"   Content: {request}")
+    print(f"   Keys: {list(request.keys()) if isinstance(request, dict) else 'Not a dict'}")
+    
     try:
         # Extract order_id and song_data from request
         order_id = request.get("order_id")
         song_data_dict = request.get("song_data")
+        
+        print(f"🔍 EXTRACTED VALUES:")
+        print(f"   order_id: {order_id}")
+        print(f"   song_data_dict: {song_data_dict}")
         
         if not order_id or not song_data_dict:
             raise HTTPException(
@@ -147,17 +156,31 @@ async def create_song_from_order(
         # Convert dict to CreateSongRequest
         song_data = CreateSongRequest(**song_data_dict)
         
+        print(f"🔍 SONG CREATION DEBUG:")
+        print(f"   order_id: {order_id}")
+        print(f"   song_data: {song_data}")
+        print(f"   current_user.id: {current_user.id}")
+        
         use_case = CreateSongFromOrderUseCase(unit_of_work, ai_service)
         user_id_str = str(current_user.id.value) if hasattr(current_user.id, "value") else str(current_user.id)
+        
+        print(f"   user_id_str: {user_id_str}")
+        print(f"   About to execute use case...")
         
         return await use_case.execute(song_data, user_id_str, order_id)
         
     except ValueError as e:
+        print(f"❌ SONG CREATION VALUE ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
+        print(f"❌ SONG CREATION UNEXPECTED ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create song from order: {str(e)}"

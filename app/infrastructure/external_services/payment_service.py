@@ -115,6 +115,9 @@ class PaymentService:
         """Verify webhook signature from Stripe"""
         try:
             print(f"🔍 Verifying Stripe webhook signature...")
+            print(f"🔧 Webhook secret configured: {bool(self.webhook_secret)}")
+            print(f"🔧 Webhook secret (first 10 chars): {self.webhook_secret[:10] if self.webhook_secret else 'None'}...")
+            print(f"🔧 Signature: {signature[:50] if signature else 'None'}...")
             
             if not self.webhook_secret:
                 print("❌ No webhook secret configured")
@@ -125,12 +128,20 @@ class PaymentService:
                 return False
             
             # Verify the webhook signature using Stripe's library
-            stripe.Webhook.construct_event(
-                payload, signature, self.webhook_secret
-            )
-            
-            print("✅ Stripe webhook signature verified successfully")
-            return True
+            try:
+                stripe.Webhook.construct_event(
+                    payload, signature, self.webhook_secret
+                )
+                print("✅ Stripe webhook signature verified successfully")
+                return True
+            except stripe.error.SignatureVerificationError as e:
+                print(f"❌ CRITICAL SECURITY ERROR: Stripe webhook signature verification failed")
+                print(f"🔧 This could be an attack attempt or misconfigured webhook")
+                print(f"🔧 Signature format expected: t=timestamp,v1=signature") 
+                print(f"🔧 Received signature: {signature}")
+                print(f"🔧 Webhook secret configured: {bool(self.webhook_secret)}")
+                print(f"❌ WEBHOOK REJECTED FOR SECURITY")
+                return False
             
         except stripe.error.SignatureVerificationError as e:
             print(f"❌ Stripe webhook signature verification failed: {e}")

@@ -31,8 +31,7 @@ async def register_user(
         return await use_case.execute(user_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        print(f"Registration error: {e}")
+    except Exception as e:  
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -62,7 +61,6 @@ async def forgot_password(
     try:
         return await use_case.execute(request)
     except Exception as e:
-        print(f"Error in forgot password endpoint: {e}")
         return ForgotPasswordResponse(
             message="If an account with that email exists, a password reset link has been sent.",
             success=True
@@ -81,7 +79,6 @@ async def reset_password(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Error in reset password endpoint: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -91,18 +88,13 @@ async def verify_email(
     unit_of_work: IUnitOfWork = Depends(get_unit_of_work)
 ):
     """Verify user email with token"""
-    print(f"Verification attempt with token: {request.token}")
-    
     use_case = EmailVerificationUseCase(unit_of_work)
     try:
         await use_case.execute(request)
-        print(f"Email verification successful for token: {request.token}")
         return {"message": "Email verified successfully", "success": True}
     except ValueError as e:
-        print(f"Verification failed for token {request.token}: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Error in verify email endpoint for token {request.token}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -113,7 +105,6 @@ async def get_google_oauth_url():
         use_case = GoogleOAuthRedirectUseCase()  # Don't need unit_of_work for URL generation
         return use_case.get_authorization_url()
     except Exception as e:
-        print(f"Google OAuth URL generation error: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate Google OAuth URL")
 
 
@@ -129,7 +120,6 @@ async def google_oauth_callback(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Google OAuth callback error: {e}")
         raise HTTPException(status_code=500, detail="Google authentication failed")
 
 
@@ -145,7 +135,6 @@ async def google_oauth_token(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Google OAuth error: {e}")
         raise HTTPException(status_code=500, detail="Google authentication failed")
 
 
@@ -157,17 +146,13 @@ async def refresh_token(
     """Refresh access token"""
     from ...core.security import verify_refresh_token, create_access_token
     try:
-        print(f"Refresh token attempt with token: {request.refresh_token}")
         user_id = verify_refresh_token(request.refresh_token)
         if not user_id:
-            print("Invalid refresh token - verification failed")
             raise HTTPException(status_code=401, detail="Invalid refresh token")
         
-        print(f"Refresh token valid for user: {user_id}")
         new_access_token = create_access_token(user_id)
         return {"access_token": new_access_token, "token_type": "bearer"}
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error in refresh token endpoint: {e}")
         raise HTTPException(status_code=401, detail="Invalid refresh token")
