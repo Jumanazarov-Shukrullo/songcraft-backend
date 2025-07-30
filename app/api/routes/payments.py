@@ -11,7 +11,7 @@ from ...application.use_cases.create_order import CreateOrderUseCase
 from ...application.use_cases.create_song_from_order import CreateSongFromOrderUseCase
 from ...application.dtos.order_dtos import OrderCreateDTO
 from ...application.dtos.song_dtos import CreateSongRequest
-from ...api.dependencies import get_current_user, get_unit_of_work, get_payment_service, get_ai_service
+from ...api.dependencies import get_current_user, get_unit_of_work, get_payment_service, get_ai_service, get_payment_manager
 from ...domain.entities.user import User
 from ...domain.enums import ProductType
 from ...core.config import settings
@@ -42,6 +42,7 @@ async def create_checkout(
     current_user: User = Depends(get_current_user),
     unit_of_work = Depends(get_unit_of_work),
     payment_service = Depends(get_payment_service),
+    payment_manager = Depends(get_payment_manager),
     ai_service = Depends(get_ai_service)
 ):
     """Create checkout session for payment or handle free orders"""
@@ -156,29 +157,47 @@ async def create_checkout(
             create_order_use_case = CreateOrderUseCase(unit_of_work, payment_service)
             order = await create_order_use_case.execute(order_data, current_user.id)
             
-            # Create Stripe checkout session
-            checkout_result = await payment_service.create_checkout_session(
-                customer_email=str(current_user.email),
-                product_type=request.product_type,
-                custom_data={
-                    "user_id": str(current_user.id.value if hasattr(current_user.id, "value") else current_user.id),
-                    "order_id": str(order.id),
-                    "customer_name": str(current_user.email).split("@")[0],
-                    "song_data": json.dumps(request.song_data) if request.song_data else None
-                }
-            )
+            # Create checkout session using appropriate payment provider
+            user_id_str = str(current_user.id.value if hasattr(current_user.id, "value") else current_user.id)
             
-            # CRITICAL FIX: Update the order with Stripe session ID
+            # Use PaymentManager for provider selection if rotation is enabled
+            if settings.ENABLE_PROVIDER_ROTATION:
+                checkout_result = await payment_manager.create_checkout_session(
+                    customer_email=str(current_user.email),
+                    product_type=request.product_type,
+                    user_id=user_id_str,
+                    custom_data={
+                        "order_id": str(order.id),
+                        "customer_name": str(current_user.email).split("@")[0],
+                        "song_data": json.dumps(request.song_data) if request.song_data else None
+                    }
+                )
+            else:
+                # Use default Stripe service
+                checkout_result = await payment_service.create_checkout_session(
+                    customer_email=str(current_user.email),
+                    product_type=request.product_type,
+                    custom_data={
+                        "user_id": user_id_str,
+                        "order_id": str(order.id),
+                        "customer_name": str(current_user.email).split("@")[0],
+                        "song_data": json.dumps(request.song_data) if request.song_data else None
+                    }
+                )
+            
+            # Update the order with payment session ID and provider info
             async with unit_of_work:
                 order_repo = unit_of_work.orders
                 from ...domain.value_objects.entity_ids import OrderId
                 order_entity = await order_repo.get_by_id(OrderId.from_str(str(order.id)))
                 if order_entity:
-                    # Store the Stripe session ID in the order for webhook processing
-                    order_entity.stripe_session_id = checkout_result["checkout_id"]
+                    # Store the payment session ID and provider info for webhook processing
+                    order_entity.stripe_session_id = checkout_result["checkout_id"]  # Keep this field for compatibility
+                    # Add provider info if available
+                    provider = checkout_result.get("payment_provider", "stripe")
+                    print(f"✅ Order {order.id} linked to {provider} session: {checkout_result['checkout_id']}")
                     await order_repo.update(order_entity)
                     await unit_of_work.commit()
-                    print(f"✅ Order {order.id} linked to Stripe session: {checkout_result['checkout_id']}")
                 else:
                     print(f"❌ Failed to find order {order.id} for session linking")
             
@@ -368,4 +387,87 @@ async def test_webhook():
                 "status": "succeeded"
             }
         }
-    } 
+    }
+
+
+@router.post("/dodo-webhook")
+async def dodo_webhook(
+    request: Request,
+    payment_manager = Depends(get_payment_manager)
+):
+    """Handle DoDo payment webhooks"""
+    try:
+        # Get raw body and headers
+        body = await request.body()
+        signature = request.headers.get("X-DoDo-Signature", "")
+        
+        # Verify webhook signature
+        from ...infrastructure.external_services.payment_manager import PaymentProvider
+        if not payment_manager.verify_webhook_signature(body, signature, PaymentProvider.DODO):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        
+        # Parse webhook data
+        webhook_data = await request.json()
+        
+        # Process webhook
+        result = await payment_manager.process_webhook(webhook_data, PaymentProvider.DODO)
+        
+        if result.get("status") == "completed":
+            # Handle successful payment - similar to Stripe webhook processing
+            # This would trigger song generation, etc.
+            print(f"✅ DoDo payment completed: {result.get('payment_id')}")
+        
+        return {"status": "success", "processed": True}
+        
+    except Exception as e:
+        print(f"❌ Error processing DoDo webhook: {e}")
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
+
+
+@router.post("/gumroad-webhook")
+async def gumroad_webhook(
+    request: Request,
+    payment_manager = Depends(get_payment_manager)
+):
+    """Handle Gumroad payment webhooks"""
+    try:
+        # Get raw body and headers
+        body = await request.body()
+        signature = request.headers.get("X-Gumroad-Signature", "")
+        
+        # Verify webhook signature
+        from ...infrastructure.external_services.payment_manager import PaymentProvider
+        if not payment_manager.verify_webhook_signature(body, signature, PaymentProvider.GUMROAD):
+            raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        
+        # Parse webhook data
+        webhook_data = await request.json()
+        
+        # Process webhook
+        result = await payment_manager.process_webhook(webhook_data, PaymentProvider.GUMROAD)
+        
+        if result.get("status") == "completed":
+            # Handle successful payment - similar to Stripe webhook processing
+            # This would trigger song generation, etc.
+            print(f"✅ Gumroad payment completed: {result.get('payment_id')}")
+        
+        return {"status": "success", "processed": True}
+        
+    except Exception as e:
+        print(f"❌ Error processing Gumroad webhook: {e}")
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
+
+
+@router.get("/provider-stats")
+async def get_provider_stats(
+    current_user: User = Depends(get_current_user),
+    payment_manager = Depends(get_payment_manager)
+):
+    """Get payment provider distribution statistics (for debugging)"""
+    stats = payment_manager.get_provider_stats()
+    
+    # Add user's assigned provider for debugging
+    user_provider = payment_manager.get_payment_provider_for_user(str(current_user.id.value))
+    stats["user_provider"] = user_provider.value
+    
+    return stats 

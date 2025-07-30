@@ -47,6 +47,17 @@ class Settings(BaseSettings):
     # Stripe Product IDs (created in Stripe Dashboard)
     STRIPE_AUDIO_PRODUCT_ID: str = Field(..., env="STRIPE_AUDIO_PRODUCT_ID")
     STRIPE_VIDEO_PRODUCT_ID: str = Field(..., env="STRIPE_VIDEO_PRODUCT_ID")
+    
+    # DoDo Payments Configuration
+    DODO_API_KEY: str = Field(default="", env="DODO_API_KEY")
+    DODO_SECRET_KEY: str = Field(default="", env="DODO_SECRET_KEY")
+    DODO_WEBHOOK_SECRET: str = Field(default="", env="DODO_WEBHOOK_SECRET")
+    DODO_API_URL: str = Field(default="https://api.dodo.dev", env="DODO_API_URL")
+    
+    # Gumroad Payments Configuration  
+    GUMROAD_API_KEY: str = Field(default="", env="GUMROAD_API_KEY")
+    GUMROAD_WEBHOOK_SECRET: str = Field(default="", env="GUMROAD_WEBHOOK_SECRET")
+    GUMROAD_API_URL: str = Field(default="https://api.gumroad.com", env="GUMROAD_API_URL")
 
     # Email SMTP Configuration
     SMTP_HOST: str = Field(..., env="SMTP_HOST")
@@ -84,6 +95,10 @@ class Settings(BaseSettings):
     # Pricing
     AUDIO_PRICE: int = Field(default=1399, env="AUDIO_PRICE")  # $13.99 in cents
     VIDEO_PRICE: int = Field(default=1999, env="VIDEO_PRICE")  # $19.99 in cents
+    
+    # Payment Provider Selection
+    PAYMENT_PROVIDER: str = Field(default="stripe", env="PAYMENT_PROVIDER")  # "stripe", "dodo", "gumroad", or "auto"
+    ENABLE_PROVIDER_ROTATION: bool = Field(default=False, env="ENABLE_PROVIDER_ROTATION")  # Enable 1/10 user distribution
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = Field(default=60, env="RATE_LIMIT_PER_MINUTE")

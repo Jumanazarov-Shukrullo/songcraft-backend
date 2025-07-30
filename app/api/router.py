@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 # Import all DDD routes
-from .routes import auth, songs, orders, admin, files, users, payments, feedback
+from .routes import auth, songs, orders, admin, files, users, payments, feedback, webhooks
 from ..core.config import settings
 
 # Main API router
@@ -18,6 +18,7 @@ api_router.include_router(payments.router, prefix="/payments", tags=["payments"]
 api_router.include_router(feedback.router, prefix="/feedback", tags=["feedback"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(files.router, prefix="/files", tags=["files"])
+api_router.include_router(webhooks.router, prefix="", tags=["webhooks"])
 
 @api_router.get("/health")
 async def health_check():

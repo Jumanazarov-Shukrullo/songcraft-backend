@@ -12,6 +12,7 @@ from ..domain.repositories.unit_of_work import IUnitOfWork
 from ..infrastructure.repositories.unit_of_work_impl import UnitOfWorkImpl
 from ..infrastructure.external_services.ai_service import AIService
 from ..infrastructure.external_services.payment_service import PaymentService
+from ..infrastructure.external_services.payment_manager import PaymentManager
 from ..infrastructure.external_services.storage_service import StorageService
 from ..infrastructure.external_services.email_service import EmailService
 from ..domain.entities.user import User
@@ -136,6 +137,11 @@ def get_ai_service() -> AIService:
 def get_payment_service() -> PaymentService:
     """Get payment service"""
     return PaymentService()
+
+
+def get_payment_manager() -> PaymentManager:
+    """Get payment manager with multi-provider support"""
+    return PaymentManager()
 
 
 def get_storage_service() -> StorageService:
