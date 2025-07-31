@@ -18,9 +18,7 @@ SUPABASE_WEBHOOK_GUMROAD_URL = "https://jrrmltzkitwllnidcpwr.supabase.co/functio
 async def webhook_dodo_proxy(request: Request):
     """Proxy all requests to Supabase webhook-dodo function"""
     try:
-        # DEBUG: Simple response first to test if route works
-        return {"status": "debug", "message": "Webhook route is working", "method": request.method}
-        
+        # DEBUG: Simple response first to test if route works        
         # Get request body
         body = await request.body()
         
@@ -72,7 +70,6 @@ async def webhook_gumroad_proxy(request: Request):
     """Proxy all requests to Supabase webhook-gumroad function"""
     try:
         # DEBUG: Simple response first to test if route works
-        return {"status": "debug", "message": "Gumroad webhook route is working", "method": request.method}
         
         # Get request body
         body = await request.body()
