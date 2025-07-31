@@ -11,7 +11,7 @@ router = APIRouter(tags=["webhooks"])
 
 # Supabase function URLs
 SUPABASE_WEBHOOK_DODO_URL = "https://jrrmltzkitwllnidcpwr.supabase.co/functions/v1/webhook-dodo"
-SUPABASE_WEBHOOK_GUMROAD_URL = "https://jrrmltzkitwllnidcpwr.supabase.co/functions/v1/webhook-gumorad"
+SUPABASE_WEBHOOK_GUMROAD_URL = "https://jrrmltzkitwllnidcpwr.supabase.co/functions/v1/webhook-gumroad"
 
 
 @router.api_route("/webhook_dodo", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
