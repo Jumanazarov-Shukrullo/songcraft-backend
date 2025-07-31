@@ -3,7 +3,7 @@ FastAPI main application with DDD architecture
 """
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy.exc import SQLAlchemyError
@@ -11,7 +11,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import settings
 from app.api.router import api_router
 from app.db.database import SessionLocal
-from app.api.routes.webhooks import webhook_dodo_proxy, webhook_gumroad_proxy
 
 # Import all ORM models to ensure relationships are resolved
 import app.infrastructure.orm  # This imports all models from __init__.py
@@ -46,10 +45,6 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(api_router, prefix="/api/v1")
-
-# Add webhook routes at root level (bypassing /api/v1 prefix)
-app.api_route("/webhook_dodo", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])(webhook_dodo_proxy)
-app.api_route("/webhook_gumroad", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])(webhook_gumroad_proxy)
 
 
 @app.get("/")
